@@ -9,13 +9,4 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - uses: "actions/checkout@v4"
-      - name: Prepare structure for hassfest
-        run: |
-          mkdir -p homeassistant/components
-          cp -r custom_components/skydark_calendar homeassistant/components/
-      - name: Validate with hassfest
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/github/workspace \
-            -w /github/workspace \
-            ghcr.io/home-assistant/hassfest
+      - uses: "home-assistant/actions/hassfest@master"
