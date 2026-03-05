@@ -2,13 +2,28 @@
 
 All required files for HACS submission are in place. Complete these steps to get listed in the default HACS store.
 
+## 0. Fix repository description and topics (required for HACS Action)
+
+The HACS Action fails if the repo has no **description** or **topics**. Do this first:
+
+1. On GitHub: open your repo → click the **About** (gear icon) next to the description.
+2. **Description**: set a short summary, e.g.  
+   `Skydark Family Calendar – calendar, chores, lists, meals, and more for Home Assistant`
+3. **Topics**: add at least one; for example:
+   - `home-assistant`
+   - `hacs`
+   - `home-assistant-integration`
+   - `calendar`
+4. Save.
+
 ## 1. Push to GitHub and verify Actions
 
 1. Commit and push the new files:
    - `hacs.json`
    - `.github/workflows/hacs.yaml`
    - `.github/workflows/hassfest.yaml`
-   - `custom_components/skydark_calendar/icon.png`
+   - `custom_components/skydark_calendar/brand/icon.png`
+   - `info.md` (at repository root — used as the HACS store description)
 
 2. On GitHub: **Actions** tab → confirm both workflows run and pass:
    - **HACS Action**
@@ -16,16 +31,7 @@ All required files for HACS submission are in place. Complete these steps to get
 
 3. If either fails, fix the reported issues and push again.
 
-## 2. Add repository topics
-
-On GitHub: **Settings** (or main repo page) → **About** (gear icon) → **Topics**. Add for example:
-
-- `home-assistant`
-- `hacs`
-- `calendar`
-- `home-assistant-integration`
-
-## 3. Create a GitHub release
+## 2. Create a GitHub release
 
 1. **Releases** → **Create a new release**.
 2. **Choose a tag**: create tag `v1.0.0`.
@@ -36,7 +42,7 @@ On GitHub: **Settings** (or main repo page) → **About** (gear icon) → **Topi
 
 Only full **releases** count for HACS, not tags alone.
 
-## 4. Submit to HACS default store
+## 3. Submit to HACS default store
 
 1. Fork **https://github.com/hacs/default**.
 2. Clone your fork and create a **new branch from `master`** (e.g. `add-skydark`).
