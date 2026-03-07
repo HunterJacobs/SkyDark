@@ -8,7 +8,7 @@ from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -23,6 +23,44 @@ PLATFORMS = [Platform.CALENDAR, Platform.SENSOR]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
+# Headers that prevent any caching of index.html so that updated asset
+# hashes in the file are always picked up — even by HA's service worker.
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+}
+
+
+class SkyDarkIndexView(HomeAssistantView):
+    """Serve SkyDark index.html with strict no-cache headers.
+
+    Using a dedicated view (rather than the static-path handler) lets us set
+    response headers that HA's service worker will respect, ensuring the
+    browser always fetches the latest index.html after an update.
+    """
+
+    url = f"{PANEL_URL}/index.html"
+    name = "skydark_index"
+    requires_auth = False
+
+    def __init__(self, www_path: Path) -> None:
+        self._index = www_path / "index.html"
+
+    async def get(self, request):  # type: ignore[override]
+        from aiohttp import web
+
+        if not self._index.exists():
+            raise web.HTTPNotFound()
+
+        # index.html is tiny (~600 bytes); synchronous read is fine here.
+        content = self._index.read_bytes()
+        return web.Response(
+            body=content,
+            content_type="text/html",
+            charset="utf-8",
+            headers=_NO_CACHE_HEADERS,
+        )
+
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the Skydark Calendar component."""
@@ -34,11 +72,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Skydark Calendar from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    # Serve frontend static files from www/
     www_path = Path(__path__[0]) / "www"
     if www_path.exists():
+        # Serve index.html through a dedicated view with no-cache headers so
+        # that HA's service worker never returns a stale copy after an update.
+        hass.http.register_view(SkyDarkIndexView(www_path))
+
+        # Serve all other static assets (JS/CSS chunks, manifest, icons).
+        # Content-hashed filenames mean these are safe to cache long-term.
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(PANEL_URL, str(www_path), False)]
+            [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=True)]
         )
 
     # Register the panel (iframe that loads our frontend).
