@@ -3,7 +3,7 @@ import ListCard, { type ListItemData } from "../components/Lists/ListCard";
 import Modal from "../components/Common/Modal";
 import PinPrompt from "../components/Common/PinPrompt";
 import { useAppContext } from "../contexts/AppContext";
-import { SKYDARK_COLORS } from "../config/theme";
+import { SKYDARK_COLORS } from "../lib/theme";
 
 export interface ListData {
   id: string;

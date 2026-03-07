@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Modal from "../Common/Modal";
 import CloseIcon from "../Common/CloseIcon";
-import { PROFILE_COLORS } from "../../config/theme";
+import { PROFILE_COLORS } from "../../lib/theme";
 
 export interface AddProfileResult {
   name: string;
