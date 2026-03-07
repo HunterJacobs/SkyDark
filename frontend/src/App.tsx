@@ -30,6 +30,7 @@ function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Navigate to="/calendar" replace />} />
+          <Route path="/index.html" element={<Navigate to="/calendar" replace />} />
           <Route path="/calendar" element={<CalendarView />} />
           <Route path="/tasks" element={<TasksView />} />
           <Route path="/lists" element={<ListsView />} />

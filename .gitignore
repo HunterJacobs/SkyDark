@@ -23,3 +23,5 @@ Thumbs.db
 
 # Local config (do not commit HA config or secrets)
 config/
+# Allow frontend source config (theme, etc.)
+!frontend/src/config/

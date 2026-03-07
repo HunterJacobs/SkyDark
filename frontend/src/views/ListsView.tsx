@@ -229,7 +229,7 @@ export default function ListsView() {
           <div>
             <label className="block text-sm font-medium text-skydark-text mb-1">Color</label>
             <div className="flex gap-2 flex-wrap">
-              {SKYDARK_COLORS.map((c) => (
+              {SKYDARK_COLORS.map((c: string) => (
                 <button
                   key={c}
                   type="button"

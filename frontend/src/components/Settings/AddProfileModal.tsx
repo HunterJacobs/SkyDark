@@ -48,7 +48,7 @@ export default function AddProfileModal({ open, onClose, onAdd }: AddProfileModa
           <div>
             <label className="block text-sm font-medium text-skydark-text mb-2">Color</label>
             <div className="grid grid-cols-5 gap-3">
-              {PROFILE_COLORS.map((c) => (
+              {PROFILE_COLORS.map((c: string) => (
                 <button
                   key={c}
                   type="button"
