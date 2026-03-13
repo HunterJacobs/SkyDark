@@ -11,13 +11,17 @@ export interface PhotoItem {
   caption: string;
 }
 
+// Placeholder: 1x1 transparent pixel (works fully offline; real photos come from HA backend)
+const PLACEHOLDER_DATA_URI =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E";
+
 const INITIAL_PHOTOS: PhotoItem[] = [
-  { id: "1", url: "https://picsum.photos/1920/1080?random=1", caption: "Family" },
-  { id: "2", url: "https://picsum.photos/1920/1080?random=2", caption: "Trip" },
-  { id: "3", url: "https://picsum.photos/1920/1080?random=3", caption: "" },
-  { id: "4", url: "https://picsum.photos/1920/1080?random=4", caption: "" },
-  { id: "5", url: "https://picsum.photos/1920/1080?random=5", caption: "" },
-  { id: "6", url: "https://picsum.photos/1920/1080?random=6", caption: "" },
+  { id: "1", url: PLACEHOLDER_DATA_URI, caption: "Family" },
+  { id: "2", url: PLACEHOLDER_DATA_URI, caption: "Trip" },
+  { id: "3", url: PLACEHOLDER_DATA_URI, caption: "" },
+  { id: "4", url: PLACEHOLDER_DATA_URI, caption: "" },
+  { id: "5", url: PLACEHOLDER_DATA_URI, caption: "" },
+  { id: "6", url: PLACEHOLDER_DATA_URI, caption: "" },
 ];
 
 interface PhotosContextValue {
