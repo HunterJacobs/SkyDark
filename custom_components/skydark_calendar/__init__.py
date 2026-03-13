@@ -13,8 +13,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from homeassistant.helpers.network import get_url
-
 from .const import DB_NAME, DOMAIN, PANEL_ICON, PANEL_TITLE, PANEL_URL
 from .database import SkydarkDatabase
 from .websocket_api import async_register_websocket_handlers
@@ -64,6 +62,32 @@ class SkyDarkIndexView(HomeAssistantView):
         )
 
 
+class SkyDarkRootView(HomeAssistantView):
+    """Serve index.html for /skydark (no trailing path) - same as index.html."""
+
+    url = PANEL_URL
+    name = "skydark_root"
+    requires_auth = False
+
+    def __init__(self, www_path: Path) -> None:
+        self._index = www_path / "index.html"
+
+    async def get(self, request):  # type: ignore[override]
+        from aiohttp import web
+
+        hass = request.app["hass"]
+        exists = await hass.async_add_executor_job(self._index.exists)
+        if not exists:
+            raise web.HTTPNotFound()
+        content = await hass.async_add_executor_job(self._index.read_bytes)
+        return web.Response(
+            body=content,
+            content_type="text/html",
+            charset="utf-8",
+            headers=_NO_CACHE_HEADERS,
+        )
+
+
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the Skydark Calendar component."""
     hass.data.setdefault(DOMAIN, {})
@@ -92,25 +116,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         www_path = Path(__path__[0]) / "www"
         www_exists = await hass.async_add_executor_job(www_path.exists)
         if www_exists:
+            hass.http.register_view(SkyDarkRootView(www_path))
             hass.http.register_view(SkyDarkIndexView(www_path))
             await hass.http.async_register_static_paths(
                 [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=True)]
             )
 
         async_remove_panel(hass, "skydark")
-        # Use full URL when available (fixes white screen with reverse proxy, Nabu Casa, etc.)
-        try:
-            base = get_url(hass, allow_cloud=True)
-            panel_url = f"{base.rstrip('/')}{PANEL_URL}/index.html" if base else f"{PANEL_URL}/index.html"
-        except Exception:
-            panel_url = f"{PANEL_URL}/index.html"
         async_register_built_in_panel(
             hass,
             component_name="iframe",
             sidebar_title=PANEL_TITLE,
             sidebar_icon=PANEL_ICON,
             frontend_url_path="skydark",
-            config={"url": panel_url},
+            config={"url": PANEL_URL},
             require_admin=False,
         )
 
