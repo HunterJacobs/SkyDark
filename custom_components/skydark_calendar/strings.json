@@ -28,6 +28,10 @@
         "data": {
           "family_name": "Family name",
           "weather_entity": "Weather entity"
+        },
+        "data_description": {
+          "family_name": "Display name for your family.",
+          "weather_entity": "Home Assistant weather entity to show in the header."
         }
       }
     }

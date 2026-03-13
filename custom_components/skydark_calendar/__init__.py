@@ -13,6 +13,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from homeassistant.helpers.network import get_url
+
 from .const import DB_NAME, DOMAIN, PANEL_ICON, PANEL_TITLE, PANEL_URL
 from .database import SkydarkDatabase
 from .websocket_api import async_register_websocket_handlers
@@ -96,13 +98,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
         async_remove_panel(hass, "skydark")
+        # Use full URL when available (fixes white screen with reverse proxy, Nabu Casa, etc.)
+        try:
+            base = get_url(hass, allow_cloud=True)
+            panel_url = f"{base.rstrip('/')}{PANEL_URL}/index.html" if base else f"{PANEL_URL}/index.html"
+        except Exception:
+            panel_url = f"{PANEL_URL}/index.html"
         async_register_built_in_panel(
             hass,
             component_name="iframe",
             sidebar_title=PANEL_TITLE,
             sidebar_icon=PANEL_ICON,
             frontend_url_path="skydark",
-            config={"url": f"{PANEL_URL}/index.html"},
+            config={"url": panel_url},
             require_admin=False,
         )
 
