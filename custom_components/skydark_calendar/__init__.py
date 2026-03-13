@@ -129,7 +129,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sidebar_title=PANEL_TITLE,
             sidebar_icon=PANEL_ICON,
             frontend_url_path="skydark",
-            config={"url": PANEL_URL},
+            config={"url": f"{PANEL_URL}/index.html"},
             require_admin=False,
         )
 

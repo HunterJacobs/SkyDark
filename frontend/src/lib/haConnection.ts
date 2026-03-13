@@ -1,7 +1,6 @@
 /**
  * Home Assistant WebSocket connection for the SkyDark panel.
  * When running inside HA's iframe (same origin), tries to reuse stored auth.
- * Supports offline mode: when offline, throws so app can show cached/empty state.
  */
 
 import {
@@ -14,7 +13,6 @@ import {
 
 const HASS_URL_KEY = "hassUrl";
 const HASS_TOKENS_KEY = "hassTokens";
-const CONNECTION_TIMEOUT_MS = 15000;
 
 function getHassUrl(): string {
   return window.location.origin;
@@ -70,55 +68,33 @@ function saveTokens(data: AuthDataLike | null): void {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms)
-    ),
-  ]);
-}
-
 let connectionPromise: Promise<Connection> | null = null;
 
 /**
  * Get or create the single HA WebSocket connection for the app lifecycle.
  * Uses stored tokens when in HA iframe; otherwise prompts for auth.
- * When offline (navigator.onLine === false), fails fast so app can show offline UI.
  */
 export async function getHAConnection(): Promise<Connection> {
   if (connectionPromise) return connectionPromise;
 
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    throw new Error("You appear to be offline. Connect to your network and try again.");
-  }
-
   connectionPromise = (async () => {
     const hassUrl = getHassUrl();
 
-    const auth = await withTimeout(
-      getAuth({
-        hassUrl,
-        loadTokens: loadStoredTokens,
-        saveTokens,
-      }).catch((err) => {
-        if (err === ERR_HASS_HOST_REQUIRED) {
-          return getAuth({ hassUrl });
-        }
-        if (err === ERR_INVALID_AUTH) {
-          return getAuth({ hassUrl });
-        }
-        throw err;
-      }),
-      CONNECTION_TIMEOUT_MS,
-      "Connection timed out. Check that Home Assistant is running and reachable."
-    );
+    const auth = await getAuth({
+      hassUrl,
+      loadTokens: loadStoredTokens,
+      saveTokens,
+    }).catch((err) => {
+      if (err === ERR_HASS_HOST_REQUIRED) {
+        return getAuth({ hassUrl });
+      }
+      if (err === ERR_INVALID_AUTH) {
+        return getAuth({ hassUrl });
+      }
+      throw err;
+    });
 
-    const conn = await withTimeout(
-      createConnection({ auth }),
-      CONNECTION_TIMEOUT_MS,
-      "Could not connect to Home Assistant. You may be offline."
-    );
+    const conn = await createConnection({ auth });
     conn.addEventListener("ready", () => {
       console.debug("[SkyDark] HA WebSocket connected");
     });

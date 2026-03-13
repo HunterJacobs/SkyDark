@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { getHAConnection, clearHAConnection } from "../lib/haConnection";
+import { getHAConnection } from "../lib/haConnection";
 import type { Connection } from "home-assistant-js-websocket";
 import {
   fetchConfig,
@@ -27,38 +27,6 @@ import type { CalendarEvent } from "../types/calendar";
 import type { FamilyMember } from "../types/calendar";
 
 const DEFAULT_EVENT_RANGE_DAYS = 60;
-const CACHE_KEY = "skydark_data_cache";
-
-function loadFromCache(): Partial<SkydarkDataState> | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SkydarkDataState>;
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function saveToCache(data: SkydarkDataState): void {
-  try {
-    const toCache = {
-      events: data.events,
-      tasks: data.tasks,
-      lists: data.lists,
-      listItems: data.listItems,
-      meals: data.meals,
-      familyMembers: data.familyMembers,
-      config: data.config,
-      pointsByMember: data.pointsByMember,
-      rewards: data.rewards,
-    };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(toCache));
-  } catch {
-    // ignore (quota, private browsing)
-  }
-}
 
 export interface SkydarkDataState {
   connection: Connection | null;
@@ -68,7 +36,11 @@ export interface SkydarkDataState {
   listItems: Record<string, SkydarkListItem[]>;
   meals: SkydarkMeal[];
   familyMembers: FamilyMember[];
-  config: { family_name?: string; weather_entity?: string; panel_url?: string } | null;
+  config: {
+    family_name?: string;
+    weather_entity?: string;
+    panel_url?: string;
+  } | null;
   pointsByMember: Record<string, number>;
   rewards: SkydarkReward[];
   loading: boolean;
@@ -90,31 +62,34 @@ const initialState: SkydarkDataState = {
   error: null,
 };
 
-export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS): {
+export function useSkydarkData(
+  eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS,
+): {
   data: SkydarkDataState;
   refetch: () => Promise<void>;
   refetchEvents: (startDate?: string, endDate?: string) => Promise<void>;
   refetchMeals: (startDate?: string, endDate?: string) => Promise<void>;
 } {
-  const [data, setData] = useState<SkydarkDataState>(() => {
-    const cached = loadFromCache();
-    if (cached) {
-      return {
-        ...initialState,
-        ...cached,
-        connection: null,
-        loading: true,
-        error: null,
-      };
-    }
-    return initialState;
-  });
+  const [data, setData] = useState<SkydarkDataState>(initialState);
 
   const load = useCallback(
     async (conn: Connection, startDate?: string, endDate?: string) => {
       const start = startDate ?? new Date().toISOString().slice(0, 10);
-      const end = endDate ?? new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const [eventsRes, tasksRes, listsRes, mealsRes, familyRes, configRes, pointsRes, rewardsRes] = await Promise.all([
+      const end =
+        endDate ??
+        new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+      const [
+        eventsRes,
+        tasksRes,
+        listsRes,
+        mealsRes,
+        familyRes,
+        configRes,
+        pointsRes,
+        rewardsRes,
+      ] = await Promise.all([
         fetchEvents(conn, start, end),
         fetchTasks(conn),
         fetchLists(conn),
@@ -125,8 +100,11 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
         fetchRewards(conn),
       ]);
 
-      const events: CalendarEvent[] = (eventsRes.events ?? []).map((e: SkydarkEvent) => eventToCalendarEvent(e));
-      const listItems: Record<string, SkydarkListItem[]> = listsRes.list_items ?? {};
+      const events: CalendarEvent[] = (eventsRes.events ?? []).map(
+        (e: SkydarkEvent) => eventToCalendarEvent(e),
+      );
+      const listItems: Record<string, SkydarkListItem[]> =
+        listsRes.list_items ?? {};
       const cfg = configRes.config ?? {};
       const config = {
         panel_url: configRes.panel_url,
@@ -134,29 +112,28 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
         weather_entity: (cfg as { weather_entity?: string }).weather_entity,
       };
 
-      const newData: SkydarkDataState = {
-        ...initialState,
+      setData((prev) => ({
+        ...prev,
         connection: conn,
         events,
         tasks: tasksRes.tasks ?? [],
         lists: listsRes.lists ?? [],
         listItems,
         meals: mealsRes.meals ?? [],
-        familyMembers: Array.isArray(familyRes.family_members) ? familyRes.family_members : [],
+        familyMembers: Array.isArray(familyRes.family_members)
+          ? familyRes.family_members
+          : [],
         config,
         pointsByMember: pointsRes.points_by_member ?? {},
         rewards: rewardsRes.rewards ?? [],
         loading: false,
         error: null,
-      };
-      saveToCache(newData);
-      setData(newData);
+      }));
     },
-    [eventRangeDays]
+    [eventRangeDays],
   );
 
   const refetch = useCallback(async () => {
-    clearHAConnection();
     setData((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const conn = await getHAConnection();
@@ -167,7 +144,6 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
         ...prev,
         loading: false,
         error: message,
-        connection: null,
       }));
     }
   }, [load]);
@@ -179,15 +155,20 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
       try {
         const start = startDate ?? new Date().toISOString().slice(0, 10);
         const end =
-          endDate ?? new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          endDate ??
+          new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
         const res = await fetchEvents(conn, start, end);
-        const events = (res.events ?? []).map((e: SkydarkEvent) => eventToCalendarEvent(e));
+        const events = (res.events ?? []).map((e: SkydarkEvent) =>
+          eventToCalendarEvent(e),
+        );
         setData((prev) => ({ ...prev, events }));
       } catch {
         // keep previous events on partial failure
       }
     },
-    [data.connection, eventRangeDays]
+    [data.connection, eventRangeDays],
   );
 
   const refetchMeals = useCallback(
@@ -197,14 +178,17 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
       try {
         const start = startDate ?? new Date().toISOString().slice(0, 10);
         const end =
-          endDate ?? new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          endDate ??
+          new Date(Date.now() + eventRangeDays * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
         const res = await fetchMeals(conn, start, end);
         setData((prev) => ({ ...prev, meals: res.meals ?? [] }));
       } catch {
         // keep previous meals
       }
     },
-    [data.connection, eventRangeDays]
+    [data.connection, eventRangeDays],
   );
 
   useEffect(() => {
@@ -217,13 +201,9 @@ export function useSkydarkData(eventRangeDays: number = DEFAULT_EVENT_RANGE_DAYS
         await load(conn);
       } catch (e) {
         if (cancelled) return;
-        clearHAConnection();
         const message = e instanceof Error ? e.message : "Failed to connect";
-        const cached = loadFromCache();
         setData((prev) => ({
           ...prev,
-          ...(cached ?? {}),
-          connection: null,
           loading: false,
           error: message,
         }));
