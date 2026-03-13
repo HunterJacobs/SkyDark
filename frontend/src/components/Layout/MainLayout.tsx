@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { useAppContext } from "../../contexts/AppContext";
 import { usePhotosContext } from "../../contexts/PhotosContext";
+import { useSkydarkDataContext } from "../../contexts/SkydarkDataContext";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
 import { useWeeklyWeather, getWeatherIcon } from "../../hooks/useWeeklyWeather";
 
@@ -227,6 +228,32 @@ function ScreenSaverOverlay() {
   );
 }
 
+function ConnectionBanner() {
+  const skydark = useSkydarkDataContext();
+  const error = skydark?.data?.error;
+  const refetch = skydark?.refetch;
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  if (!error && !isOffline) return null;
+  const message = error ?? "You appear to be offline. Some features may be limited.";
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 text-sm"
+      role="alert"
+    >
+      <span>{message}</span>
+      {refetch && (
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="shrink-0 px-3 py-1 rounded-lg bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 font-medium"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface MainLayoutProps {
   children: ReactNode;
 }
@@ -252,6 +279,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
     >
       <Sidebar />
       <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+        <ConnectionBanner />
         <Header />
         <main
           className={`flex-1 p-5 sm:p-6 min-h-0 ${
