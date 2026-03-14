@@ -274,21 +274,59 @@ export default function MealsView() {
 
   const doDropFromPopular = async (recipe: MealRecipe, date: string, mealType: string) => {
     const conn = skydark?.data?.connection;
+    const existingSlot = meals.find((m) => m.date === date && m.mealType === mealType);
     if (conn) {
       try {
-        await serviceAddMeal(conn, {
-          name: recipe.name,
-          meal_date: date,
-          meal_type: mealType,
-          meal_recipe_id: recipe.id,
-        });
+        if (existingSlot) {
+          await serviceUpdateMeal(conn, {
+            meal_id: existingSlot.id,
+            name: recipe.name,
+            meal_recipe_id: recipe.id,
+          });
+        } else {
+          await serviceAddMeal(conn, {
+            name: recipe.name,
+            meal_date: date,
+            meal_type: mealType,
+            meal_recipe_id: recipe.id,
+          });
+        }
         await skydark?.refetchMeals();
       } catch (err) {
         console.error("[SkyDark] Failed to add meal:", err);
       }
     } else {
-      const id = `${date}-${mealType}-${Date.now()}`;
-      setLocalMeals((prev) => [...prev, { id, date, mealType, name: recipe.name, ingredients: recipe.ingredients, imageUrl: recipe.imageUrl, instructions: recipe.instructions, recipeId: recipe.id }]);
+      if (existingSlot) {
+        setLocalMeals((prev) =>
+          prev.map((m) =>
+            m.id === existingSlot.id
+              ? {
+                  ...m,
+                  name: recipe.name,
+                  ingredients: recipe.ingredients,
+                  imageUrl: recipe.imageUrl,
+                  instructions: recipe.instructions,
+                  recipeId: recipe.id,
+                }
+              : m
+          )
+        );
+      } else {
+        const id = `${date}-${mealType}-${Date.now()}`;
+        setLocalMeals((prev) => [
+          ...prev,
+          {
+            id,
+            date,
+            mealType,
+            name: recipe.name,
+            ingredients: recipe.ingredients,
+            imageUrl: recipe.imageUrl,
+            instructions: recipe.instructions,
+            recipeId: recipe.id,
+          },
+        ]);
+      }
     }
   };
 

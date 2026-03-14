@@ -210,9 +210,38 @@ class SkydarkDatabase:
                 conn.execute("ALTER TABLE lists ADD COLUMN list_type TEXT DEFAULT 'general'")
             if not self._column_exists(conn, "meals", "meal_recipe_id"):
                 conn.execute("ALTER TABLE meals ADD COLUMN meal_recipe_id TEXT")
+            self._seed_default_family_members(conn)
 
         with self._connection() as conn:
             _init(conn)
+
+    def _seed_default_family_members(self, conn: sqlite3.Connection) -> None:
+        """Seed initial members when DB has none.
+
+        The frontend ships with default IDs ("1".."4") for first-run UX.
+        Seeding matching IDs avoids foreign-key failures when events/tasks are
+        created before the user customizes profiles.
+        """
+        cur = conn.execute("SELECT COUNT(*) FROM family_members")
+        count = int(cur.fetchone()[0] or 0)
+        if count > 0:
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+        defaults = [
+            ("1", "Mom", "#FFD4D4", "M", 1),
+            ("2", "Dad", "#C8E6F5", "D", 2),
+            ("3", "Harper", "#C8F5E8", "H", 3),
+            ("4", "Liam", "#FFF4D4", "L", 4),
+        ]
+        conn.executemany(
+            """
+            INSERT INTO family_members
+            (id, name, color, avatar_url, initial, sort_order, created_at)
+            VALUES (?, ?, ?, NULL, ?, ?, ?)
+            """,
+            [(id_, name, color, initial, sort_order, now) for id_, name, color, initial, sort_order in defaults],
+        )
 
     # Family members
     def get_family_members(self) -> list[dict]:
