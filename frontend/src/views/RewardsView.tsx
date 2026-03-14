@@ -4,7 +4,7 @@ import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import RewardModal from "../components/Common/RewardModal";
 import FloatingActionButton from "../components/Common/FloatingActionButton";
-import { serviceRedeemReward } from "../lib/skyDarkApi";
+import { serviceRedeemReward, serviceAddReward } from "../lib/skyDarkApi";
 import type { Reward } from "../types/rewards";
 
 const STORAGE_REWARDS = "skydark_rewards";
@@ -144,8 +144,21 @@ export default function RewardsView() {
     return "Enter PIN";
   };
 
-  const handleSaveReward = (data: Omit<Reward, "id">) => {
-    if (!skydark?.data?.connection) setLocalRewards((prev) => [...prev, { ...data, id: `r${Date.now()}` }]);
+  const handleSaveReward = async (data: Omit<Reward, "id">) => {
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      try {
+        await serviceAddReward(conn, {
+          name: data.name,
+          points_required: data.points,
+        });
+        await skydark?.refetch();
+      } catch {
+        // leave as-is
+      }
+    } else {
+      setLocalRewards((prev) => [...prev, { ...data, id: `r${Date.now()}` }]);
+    }
     setAddModalOpen(false);
   };
 

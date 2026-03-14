@@ -7,7 +7,7 @@ import PinPrompt from "../components/Common/PinPrompt";
 import { useAppContext } from "../contexts/AppContext";
 import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceCompleteTask } from "../lib/skyDarkApi";
+import { serviceCompleteTask, serviceAddTask, serviceUpdateTask } from "../lib/skyDarkApi";
 import type { Task } from "../types/tasks";
 import { isDueToday, isLateInLastWeek, formatWeekdays, formatCustomSchedule } from "../types/tasks";
 
@@ -130,18 +130,48 @@ export default function TasksView() {
     runIfUnlocked("deleteChores", () => handleDeleteTask(taskId));
   };
 
-  const handleSaveTask = (data: Partial<Task> & { id?: string }) => {
-    if (skydark?.data?.connection) return; // no add_task/update_task service yet
+  const handleSaveTask = async (data: Partial<Task> & { id?: string }) => {
+    const conn = skydark?.data?.connection;
     const points = typeof data.points === "number" ? data.points : 0;
-    if (data.id) {
-      setLocalTasks((prev) =>
-        prev.map((t) => (t.id === data.id ? { ...t, ...data, points } : t))
-      );
-    } else {
-      setLocalTasks((prev) => [
-        ...prev,
-        { ...data, id: `t${Date.now()}`, completed_date: null, points } as Task,
-      ]);
+    if (conn && data.title && data.assignee_id) {
+      try {
+        if (data.id) {
+          await serviceUpdateTask(conn, {
+            task_id: data.id,
+            title: data.title,
+            assignee_id: data.assignee_id,
+            category: data.category,
+            frequency: data.frequency,
+            icon: data.icon,
+            points,
+            due_date: data.due_date ?? undefined,
+          });
+        } else {
+          await serviceAddTask(conn, {
+            title: data.title,
+            assignee_id: data.assignee_id,
+            category: data.category,
+            frequency: data.frequency ?? "daily",
+            icon: data.icon,
+            points,
+            due_date: data.due_date ?? undefined,
+          });
+        }
+        await skydark?.refetch();
+      } catch {
+        // leave UI as-is; refetch could revert
+      }
+    } else if (!conn) {
+      if (data.id) {
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === data.id ? { ...t, ...data, points } : t))
+        );
+      } else {
+        setLocalTasks((prev) => [
+          ...prev,
+          { ...data, id: `t${Date.now()}`, completed_date: null, points } as Task,
+        ]);
+      }
     }
     setTaskModalOpen(false);
     setEditingTask(null);

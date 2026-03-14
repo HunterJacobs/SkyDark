@@ -94,12 +94,23 @@ function ScreenSaverOverlay() {
     (settings.screensaverSlideshowIntervalUnit ?? "seconds") === "minutes"
       ? (settings.screensaverSlideshowIntervalMinutes ?? 1) * 60 * 1000
       : (settings.screensaverSlideshowIntervalSeconds ?? 5) * 1000;
-  const durationMs = settings.screensaverTransitionDurationMs ?? 800;
+  const durationMs = settings.screensaverTransitionDurationMs ?? 1200;
   const transitionType = settings.screensaverTransitionType ?? "fade";
 
   const [index, setIndex] = useState(0);
   const [visibleLayer, setVisibleLayer] = useState(0);
   const transitionEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Preload current and next image to avoid pop-in and stutter during transition
+  useEffect(() => {
+    if (photos.length === 0) return;
+    const preload = (url: string) => {
+      const img = new Image();
+      img.src = url;
+    };
+    preload(photos[index]?.url ?? "");
+    if (photos.length > 1) preload(photos[(index + 1) % photos.length]?.url ?? "");
+  }, [photos, index]);
 
   useEffect(() => {
     if (!isIdle && !screensaverTriggered) return;
@@ -134,8 +145,8 @@ function ScreenSaverOverlay() {
   const currentPhoto = photos[index];
   const nextIndex = (index + 1) % photos.length;
   const nextPhoto = photos[nextIndex];
-  const transitionStyle = { transition: `opacity ${durationMs}ms ease-in-out` };
-  const slideStyle = { transition: `transform ${durationMs}ms ease-in-out` };
+  const transitionStyle = { transition: `opacity ${durationMs}ms ease-out` };
+  const slideStyle = { transition: `transform ${durationMs}ms ease-out` };
 
   const dismiss = () => {
     if (transitionEndRef.current) clearTimeout(transitionEndRef.current);

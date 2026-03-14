@@ -11,17 +11,17 @@ export interface PhotoItem {
   caption: string;
 }
 
-// Placeholder: 1x1 transparent pixel (works fully offline; real photos come from HA backend)
-const PLACEHOLDER_DATA_URI =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E";
-
+// Default photos: bundled images in public/default-photos (barn, nature, farm, etc.)
+const BASE = "/skydark/default-photos/";
 const INITIAL_PHOTOS: PhotoItem[] = [
-  { id: "1", url: PLACEHOLDER_DATA_URI, caption: "Family" },
-  { id: "2", url: PLACEHOLDER_DATA_URI, caption: "Trip" },
-  { id: "3", url: PLACEHOLDER_DATA_URI, caption: "" },
-  { id: "4", url: PLACEHOLDER_DATA_URI, caption: "" },
-  { id: "5", url: PLACEHOLDER_DATA_URI, caption: "" },
-  { id: "6", url: PLACEHOLDER_DATA_URI, caption: "" },
+  { id: "1", url: `${BASE}1.png`, caption: "Family" },
+  { id: "2", url: `${BASE}2.png`, caption: "Trip" },
+  { id: "3", url: `${BASE}3.png`, caption: "" },
+  { id: "4", url: `${BASE}4.png`, caption: "" },
+  { id: "5", url: `${BASE}5.png`, caption: "" },
+  { id: "6", url: `${BASE}6.png`, caption: "" },
+  { id: "7", url: `${BASE}7.png`, caption: "" },
+  { id: "8", url: `${BASE}8.png`, caption: "" },
 ];
 
 interface PhotosContextValue {

@@ -108,8 +108,11 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 # All Skydark services; unregistered on unload.
 _SERVICES = (
     "add_event",
+    "add_task",
+    "update_task",
     "complete_task",
     "add_points",
+    "add_reward",
     "redeem_reward",
     "add_list_item",
     "create_list",

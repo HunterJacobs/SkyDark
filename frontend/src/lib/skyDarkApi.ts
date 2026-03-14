@@ -174,11 +174,49 @@ export async function serviceAddEvent(
   return callService(conn, DOMAIN, "add_event", data);
 }
 
+export async function serviceAddTask(
+  conn: Connection,
+  data: {
+    title: string;
+    assignee_id: string;
+    category?: string;
+    frequency?: string;
+    icon?: string;
+    points?: number;
+    due_date?: string;
+  }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "add_task", data);
+}
+
+export async function serviceUpdateTask(
+  conn: Connection,
+  data: {
+    task_id: string;
+    title?: string;
+    assignee_id?: string;
+    category?: string;
+    frequency?: string;
+    icon?: string;
+    points?: number;
+    due_date?: string;
+  }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "update_task", data);
+}
+
 export async function serviceCompleteTask(
   conn: Connection,
   data: { task_id: string; completed_date?: string; points?: number }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "complete_task", data);
+}
+
+export async function serviceAddReward(
+  conn: Connection,
+  data: { name: string; points_required: number; description?: string; icon?: string }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "add_reward", data);
 }
 
 export async function serviceAddPoints(

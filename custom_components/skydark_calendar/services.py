@@ -19,8 +19,11 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_ADD_EVENT = "add_event"
+SERVICE_ADD_TASK = "add_task"
+SERVICE_UPDATE_TASK = "update_task"
 SERVICE_COMPLETE_TASK = "complete_task"
 SERVICE_ADD_POINTS = "add_points"
+SERVICE_ADD_REWARD = "add_reward"
 SERVICE_REDEEM_REWARD = "redeem_reward"
 SERVICE_ADD_LIST_ITEM = "add_list_item"
 SERVICE_CREATE_LIST = "create_list"
@@ -31,12 +34,39 @@ SERVICE_SEND_NOTIFICATION = "send_notification"
 ADD_EVENT_SCHEMA = vol.Schema(
     {
         vol.Required("title"): cv.string,
-        vol.Required("start_time"): cv.datetime,
-        vol.Optional("end_time"): cv.datetime,
+        vol.Required("start_time"): vol.Any(cv.datetime, cv.string),
+        vol.Optional("end_time"): vol.Any(cv.datetime, cv.string),
         vol.Optional("all_day", default=False): cv.boolean,
         vol.Optional("calendar_id"): cv.string,
         vol.Optional("description"): cv.string,
         vol.Optional("location"): cv.string,
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+ADD_TASK_SCHEMA = vol.Schema(
+    {
+        vol.Required("title"): cv.string,
+        vol.Required("assignee_id"): cv.string,
+        vol.Optional("category"): cv.string,
+        vol.Optional("frequency", default="daily"): cv.string,
+        vol.Optional("icon"): cv.string,
+        vol.Optional("points", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("due_date"): cv.string,
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+UPDATE_TASK_SCHEMA = vol.Schema(
+    {
+        vol.Required("task_id"): cv.string,
+        vol.Optional("title"): cv.string,
+        vol.Optional("assignee_id"): cv.string,
+        vol.Optional("category"): cv.string,
+        vol.Optional("frequency"): cv.string,
+        vol.Optional("icon"): cv.string,
+        vol.Optional("points"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("due_date"): cv.string,
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -46,6 +76,16 @@ COMPLETE_TASK_SCHEMA = vol.Schema(
         vol.Required("task_id"): cv.string,
         vol.Optional("completed_date"): cv.string,
         vol.Optional("points", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
+ADD_REWARD_SCHEMA = vol.Schema(
+    {
+        vol.Required("name"): cv.string,
+        vol.Required("points_required"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("description"): cv.string,
+        vol.Optional("icon"): cv.string,
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -126,6 +166,19 @@ SEND_NOTIFICATION_SCHEMA = vol.Schema(
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register Skydark Calendar services."""
 
+    def _parse_datetime(value: Any) -> datetime | None:
+        """Parse start_time/end_time from datetime or ISO string."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        return None
+
     async def add_event(call: ServiceCall) -> None:
         """Add a calendar event."""
         if DOMAIN not in hass.data:
@@ -134,8 +187,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not db:
             _LOGGER.warning("Database not ready")
             return
-        start = call.data["start_time"]
-        end = call.data.get("end_time")
+        start = _parse_datetime(call.data.get("start_time"))
+        end = _parse_datetime(call.data.get("end_time"))
+        if start is None:
+            _LOGGER.warning("add_event: invalid or missing start_time")
+            return
         try:
             event_id = await hass.async_add_executor_job(
                 partial(
@@ -155,6 +211,55 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         except Exception as e:
             _LOGGER.exception("add_event failed: %s", e)
+
+    async def add_task(call: ServiceCall) -> None:
+        """Add a new task."""
+        if DOMAIN not in hass.data:
+            return
+        db = hass.data[DOMAIN].get("db")
+        if not db:
+            _LOGGER.warning("Database not ready")
+            return
+        try:
+            await hass.async_add_executor_job(
+                partial(
+                    db.add_task,
+                    title=call.data["title"],
+                    assignee_id=call.data["assignee_id"],
+                    category=call.data.get("category"),
+                    frequency=call.data.get("frequency", "daily"),
+                    icon=call.data.get("icon"),
+                    points=call.data.get("points", 0),
+                    due_date=call.data.get("due_date"),
+                )
+            )
+        except Exception as e:
+            _LOGGER.exception("add_task failed: %s", e)
+
+    async def update_task(call: ServiceCall) -> None:
+        """Update an existing task."""
+        if DOMAIN not in hass.data:
+            return
+        db = hass.data[DOMAIN].get("db")
+        if not db:
+            _LOGGER.warning("Database not ready")
+            return
+        try:
+            await hass.async_add_executor_job(
+                partial(
+                    db.update_task,
+                    call.data["task_id"],
+                    title=call.data.get("title"),
+                    assignee_id=call.data.get("assignee_id"),
+                    category=call.data.get("category"),
+                    frequency=call.data.get("frequency"),
+                    icon=call.data.get("icon"),
+                    points=call.data.get("points"),
+                    due_date=call.data.get("due_date"),
+                )
+            )
+        except Exception as e:
+            _LOGGER.exception("update_task failed: %s", e)
 
     async def complete_task(call: ServiceCall) -> None:
         """Mark a task complete and optionally award points (atomic)."""
@@ -211,6 +316,26 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         except Exception as e:
             _LOGGER.exception("add_points failed: %s", e)
+
+    async def add_reward(call: ServiceCall) -> None:
+        """Add a new reward definition."""
+        if DOMAIN not in hass.data:
+            return
+        db = hass.data[DOMAIN].get("db")
+        if not db:
+            return
+        try:
+            await hass.async_add_executor_job(
+                partial(
+                    db.add_reward,
+                    name=call.data["name"],
+                    points_required=call.data["points_required"],
+                    description=call.data.get("description"),
+                    icon=call.data.get("icon"),
+                )
+            )
+        except Exception as e:
+            _LOGGER.exception("add_reward failed: %s", e)
 
     async def redeem_reward(call: ServiceCall) -> None:
         """Deduct points and redeem a reward for a member."""
@@ -340,7 +465,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_ADD_EVENT, add_event, schema=ADD_EVENT_SCHEMA
     )
     hass.services.async_register(
+        DOMAIN, SERVICE_ADD_TASK, add_task, schema=ADD_TASK_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_TASK, update_task, schema=UPDATE_TASK_SCHEMA
+    )
+    hass.services.async_register(
         DOMAIN, SERVICE_COMPLETE_TASK, complete_task, schema=COMPLETE_TASK_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_ADD_REWARD, add_reward, schema=ADD_REWARD_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_POINTS, add_points, schema=ADD_POINTS_SCHEMA

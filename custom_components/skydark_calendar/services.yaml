@@ -39,6 +39,93 @@ add_event:
       selector:
         text:
 
+add_task:
+  name: Add task
+  description: Add a new chore/task.
+  fields:
+    title:
+      name: Title
+      description: Task title
+      required: true
+      selector:
+        text:
+    assignee_id:
+      name: Assignee ID
+      description: Family member ID to assign the task to
+      required: true
+      selector:
+        text:
+    category:
+      name: Category
+      description: Optional category (e.g. chores)
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      description: daily, weekly, or custom
+      default: daily
+      selector:
+        text:
+    icon:
+      name: Icon
+      description: Optional icon name
+      selector:
+        text:
+    points:
+      name: Points
+      description: Points for completing the task
+      default: 0
+      selector:
+        number:
+          min: 0
+          step: 1
+    due_date:
+      name: Due date
+      description: Optional due date (YYYY-MM-DD)
+      selector:
+        text:
+
+update_task:
+  name: Update task
+  description: Update an existing task.
+  fields:
+    task_id:
+      name: Task ID
+      description: ID of the task to update
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      selector:
+        text:
+    assignee_id:
+      name: Assignee ID
+      selector:
+        text:
+    category:
+      name: Category
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      selector:
+        text:
+    icon:
+      name: Icon
+      selector:
+        text:
+    points:
+      name: Points
+      selector:
+        number:
+          min: 0
+          step: 1
+    due_date:
+      name: Due date
+      selector:
+        text:
+
 complete_task:
   name: Complete task
   description: Mark a task as complete.
@@ -89,6 +176,33 @@ add_points:
     task_id:
       name: Task ID
       description: Optional linked task ID
+      selector:
+        text:
+
+add_reward:
+  name: Add reward
+  description: Add a new reward definition (name and points required).
+  fields:
+    name:
+      name: Name
+      description: Reward name (e.g. Ice cream trip)
+      required: true
+      selector:
+        text:
+    points_required:
+      name: Points required
+      description: Cost in points to redeem
+      required: true
+      selector:
+        number:
+          min: 0
+          step: 1
+    description:
+      name: Description
+      selector:
+        text:
+    icon:
+      name: Icon
       selector:
         text:
 

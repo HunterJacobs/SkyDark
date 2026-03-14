@@ -101,7 +101,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   screensaverSlideshowIntervalUnit: "seconds",
   screensaverSlideshowIntervalSeconds: 5,
   screensaverSlideshowIntervalMinutes: 1,
-  screensaverTransitionDurationMs: 800,
+  screensaverTransitionDurationMs: 1200,
   screensaverTimeDisplayScale: 50,
   screensaverWeatherDisplayScale: 50,
 };
