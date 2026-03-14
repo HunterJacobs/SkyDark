@@ -332,6 +332,38 @@ delete_task:
       selector:
         text:
 
+update_meal:
+  name: Update meal
+  description: Update an existing meal.
+  fields:
+    meal_id:
+      name: Meal ID
+      description: ID of the meal to update
+      required: true
+      selector:
+        text:
+    name:
+      name: Meal name
+      description: New name for the meal
+      selector:
+        text:
+    meal_recipe_id:
+      name: Recipe ID
+      description: Link to a recipe from the library
+      selector:
+        text:
+
+delete_meal:
+  name: Delete meal
+  description: Delete a meal from the calendar.
+  fields:
+    meal_id:
+      name: Meal ID
+      description: ID of the meal to delete
+      required: true
+      selector:
+        text:
+
 upload_photo:
   name: Upload photo
   description: Register a photo (file must already exist at file_path within config directory).

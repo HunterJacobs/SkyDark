@@ -8,7 +8,7 @@ import DropTargetMealCell from "../components/Meals/DropTargetMealCell";
 import PinPrompt from "../components/Common/PinPrompt";
 import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceAddMealRecipe, serviceAddMeal } from "../lib/skyDarkApi";
+import { serviceAddMealRecipe, serviceAddMeal, serviceUpdateMeal, serviceDeleteMeal } from "../lib/skyDarkApi";
 import type { MealSlot, MealRecipe } from "../types/meals";
 import type { SaveMealPayload } from "../components/Meals/MealModal";
 
@@ -116,7 +116,19 @@ export default function MealsView() {
   const doSaveMeal = async (data: SaveMealPayload) => {
     const conn = skydark?.data?.connection;
     if (data.slotId) {
-      if (!conn) {
+      // Editing existing meal
+      if (conn) {
+        try {
+          await serviceUpdateMeal(conn, {
+            meal_id: data.slotId,
+            name: data.name,
+            meal_recipe_id: editSlot?.recipeId,
+          });
+          await skydark?.refetchMeals();
+        } catch (err) {
+          console.error("[SkyDark] Failed to update meal:", err);
+        }
+      } else {
         setLocalMeals((prev) =>
           prev.map((m) =>
             m.id === data.slotId
@@ -133,32 +145,29 @@ export default function MealsView() {
         }
       }
     } else if (slotForModal) {
-      let recipeId: string | undefined = undefined;
-      if (data.saveToLibrary && conn) {
-        try {
-          await serviceAddMealRecipe(conn, {
-            name: data.name,
-            ingredients: data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity ?? "", unit: i.unit ?? "" })),
-          });
-          await skydark?.refetchRecipes();
-        } catch (err) {
-          console.error("[SkyDark] Failed to save recipe:", err);
-        }
-      }
+      // Adding new meal
       if (conn) {
         try {
+          // Save recipe first if requested
+          if (data.saveToLibrary) {
+            await serviceAddMealRecipe(conn, {
+              name: data.name,
+              ingredients: data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity ?? "", unit: i.unit ?? "" })),
+            });
+            await skydark?.refetchRecipes();
+          }
+          // Add the meal to the calendar
           await serviceAddMeal(conn, {
             name: data.name,
             meal_date: slotForModal.date,
             meal_type: slotForModal.mealType,
-            meal_recipe_id: recipeId,
           });
           await skydark?.refetchMeals();
         } catch (err) {
           console.error("[SkyDark] Failed to add meal:", err);
         }
       } else {
-        recipeId = data.saveToLibrary ? `recipe-${Date.now()}` : undefined;
+        const recipeId = data.saveToLibrary ? `recipe-${Date.now()}` : undefined;
         const id = `${slotForModal.date}-${slotForModal.mealType}-${Date.now()}`;
         setLocalMeals((prev) => [
           ...prev,
@@ -206,8 +215,18 @@ export default function MealsView() {
     runIfUnlocked("meals", () => doRemoveMeal(slotId));
   };
 
-  const doRemoveMeal = (slotId: string) => {
-    if (!skydark?.data?.connection) setLocalMeals((prev) => prev.filter((m) => m.id !== slotId));
+  const doRemoveMeal = async (slotId: string) => {
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      try {
+        await serviceDeleteMeal(conn, { meal_id: slotId });
+        await skydark?.refetchMeals();
+      } catch (err) {
+        console.error("[SkyDark] Failed to delete meal:", err);
+      }
+    } else {
+      setLocalMeals((prev) => prev.filter((m) => m.id !== slotId));
+    }
     setModalOpen(false);
     setSlotForModal(null);
     setEditSlot(null);

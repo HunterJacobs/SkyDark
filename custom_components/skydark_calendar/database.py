@@ -633,6 +633,10 @@ class SkydarkDatabase:
                 values,
             )
 
+    def delete_meal(self, meal_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM meals WHERE id = ?", (meal_id,))
+
     # Meal recipes and ingredients (for library and shopping list)
     def get_meal_recipes(self) -> list[dict]:
         with self._connection() as conn:

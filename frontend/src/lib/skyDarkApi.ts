@@ -287,3 +287,21 @@ export async function serviceDeleteTask(
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "delete_task", data);
 }
+
+export async function serviceUpdateMeal(
+  conn: Connection,
+  data: {
+    meal_id: string;
+    name?: string;
+    meal_recipe_id?: string;
+  }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "update_meal", data);
+}
+
+export async function serviceDeleteMeal(
+  conn: Connection,
+  data: { meal_id: string }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_meal", data);
+}
