@@ -267,6 +267,44 @@ async def websocket_get_rewards(
         connection.send_error(msg["id"], "failed", "An error occurred loading rewards.")
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/get_meal_recipes",
+    }
+)
+@websocket_api.async_response
+async def websocket_get_meal_recipes(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return meal recipes with ingredients (for library)."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        def _load():
+            recipes = db.get_meal_recipes()
+            out = []
+            for r in recipes:
+                ing = db.get_meal_recipe_ingredients(r["id"])
+                out.append({
+                    "id": r["id"],
+                    "name": r["name"],
+                    "ingredients": [
+                        {"name": i.get("name", ""), "quantity": i.get("quantity") or "", "unit": i.get("unit") or ""}
+                        for i in ing
+                    ],
+                })
+            return out
+        recipes = await hass.async_add_executor_job(_load)
+        connection.send_result(msg["id"], {"recipes": recipes})
+    except Exception as e:
+        _LOGGER.exception("websocket get_meal_recipes failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred loading recipes.")
+
+
 async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     """Register WebSocket API handlers (skip if already registered on reload)."""
     if hass.data.get(DOMAIN, {}).get("ws_registered"):
@@ -279,4 +317,5 @@ async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_config)
     websocket_api.async_register_command(hass, websocket_get_points)
     websocket_api.async_register_command(hass, websocket_get_rewards)
+    websocket_api.async_register_command(hass, websocket_get_meal_recipes)
     hass.data.setdefault(DOMAIN, {})["ws_registered"] = True

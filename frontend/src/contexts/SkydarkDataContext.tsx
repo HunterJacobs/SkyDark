@@ -12,6 +12,7 @@ interface SkydarkDataContextValue {
   refetch: () => Promise<void>;
   refetchEvents: (startDate?: string, endDate?: string) => Promise<void>;
   refetchMeals: (startDate?: string, endDate?: string) => Promise<void>;
+  refetchRecipes: () => Promise<void>;
 }
 
 const SkydarkDataContext = createContext<SkydarkDataContextValue | null>(null);
@@ -25,6 +26,7 @@ export function SkydarkDataProvider({ children }: { children: ReactNode }) {
         refetch: value.refetch,
         refetchEvents: value.refetchEvents,
         refetchMeals: value.refetchMeals,
+        refetchRecipes: value.refetchRecipes,
       }}
     >
       {children}

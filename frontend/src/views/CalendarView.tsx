@@ -70,20 +70,29 @@ export default function CalendarView() {
   const doSaveEvent = async (data: Partial<CalendarEvent> & { id?: string }) => {
     const conn = skydark?.data?.connection;
     const isAdd = !data.id;
-    if (isAdd && conn && data.title && data.start_time) {
-      try {
-        await serviceAddEvent(conn, {
-          title: data.title,
-          start_time: data.start_time,
-          end_time: data.end_time,
-          all_day: data.all_day ?? false,
-          calendar_id: data.calendar_id?.[0],
-          description: data.description,
-          location: data.location,
-        });
-        await skydark?.refetchEvents();
-      } catch {
-        // fallback: optimistic local add
+    const hasRequired = data.title && data.start_time;
+    if (isAdd && hasRequired) {
+      if (conn) {
+        try {
+          await serviceAddEvent(conn, {
+            title: data.title,
+            start_time: data.start_time,
+            end_time: data.end_time,
+            all_day: data.all_day ?? false,
+            calendar_id: data.calendar_id?.[0],
+            description: data.description,
+            location: data.location,
+          });
+          await skydark?.refetchEvents();
+        } catch {
+          // fallback: optimistic local add when service fails
+          setLocalOverrides((prev) => ({
+            ...prev,
+            events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],
+          }));
+        }
+      } else {
+        // No connection: keep event visible locally so add isn't silently dropped
         setLocalOverrides((prev) => ({
           ...prev,
           events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],

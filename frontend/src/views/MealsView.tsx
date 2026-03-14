@@ -48,26 +48,46 @@ function skydarkMealsToSlots(rows: { id: string; name: string; meal_date: string
   }));
 }
 
+function serverRecipesToMealRecipes(
+  list: { id: string; name: string; ingredients?: { name: string; quantity?: string; unit?: string }[] }[]
+): MealRecipe[] {
+  return list.map((r) => ({
+    id: r.id,
+    name: r.name,
+    ingredients: (r.ingredients ?? []).map((i) => ({
+      name: i.name,
+      quantity: i.quantity ?? "",
+      unit: i.unit ?? "",
+    })),
+  }));
+}
+
 export default function MealsView() {
   const skydark = useSkydarkDataContext();
   const { runIfUnlocked, pinPromptProps } = usePinGate();
   const weekStart = startOfDay(new Date());
   const [localMeals, setLocalMeals] = useState<MealSlot[]>(loadMeals);
-  const [recipes, setRecipes] = useState<MealRecipe[]>(loadRecipes);
+  const [localRecipes, setLocalRecipes] = useState<MealRecipe[]>(loadRecipes);
 
   const serverMeals = useMemo(() => {
     if (!skydark?.data?.connection || !skydark.data.meals) return [];
     return skydarkMealsToSlots(skydark.data.meals);
   }, [skydark?.data?.connection, skydark?.data?.meals]);
 
+  const serverRecipes = useMemo(
+    () => serverRecipesToMealRecipes(skydark?.data?.mealRecipes ?? []),
+    [skydark?.data?.mealRecipes]
+  );
+
   const meals = skydark?.data?.connection ? serverMeals : localMeals;
+  const recipes = skydark?.data?.connection ? serverRecipes : localRecipes;
 
   useEffect(() => {
     if (!skydark?.data?.connection) try { localStorage.setItem(STORAGE_MEALS, JSON.stringify(localMeals)); } catch { /* ignore */ }
   }, [skydark?.data?.connection, localMeals]);
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_RECIPES, JSON.stringify(recipes)); } catch { /* ignore */ }
-  }, [recipes]);
+    if (!skydark?.data?.connection) try { localStorage.setItem(STORAGE_RECIPES, JSON.stringify(localRecipes)); } catch { /* ignore */ }
+  }, [skydark?.data?.connection, localRecipes]);
   const [modalOpen, setModalOpen] = useState(false);
   const [slotForModal, setSlotForModal] = useState<{ date: string; mealType: string } | null>(null);
   const [editSlot, setEditSlot] = useState<MealSlot | null>(null);
@@ -105,7 +125,7 @@ export default function MealsView() {
           )
         );
         if (data.updateLibrary && editSlot?.recipeId) {
-          setRecipes((prev) =>
+          setLocalRecipes((prev) =>
             prev.map((r) =>
               r.id === editSlot.recipeId ? { ...r, name: data.name, ingredients: data.ingredients, imageUrl: data.imageUrl, instructions: data.instructions } : r
             )
@@ -120,6 +140,7 @@ export default function MealsView() {
             name: data.name,
             ingredients: data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity ?? "", unit: i.unit ?? "" })),
           });
+          await skydark?.refetchRecipes();
           await skydark?.refetchMeals();
         } catch {
           // leave as-is
@@ -132,7 +153,7 @@ export default function MealsView() {
           { id, date: slotForModal.date, mealType: slotForModal.mealType, name: data.name, ingredients: data.ingredients.length ? data.ingredients : undefined, imageUrl: data.imageUrl, instructions: data.instructions, recipeId },
         ]);
         if (data.saveToLibrary) {
-          setRecipes((prev) => [...prev, { id: recipeId!, name: data.name, ingredients: data.ingredients, imageUrl: data.imageUrl, instructions: data.instructions }]);
+          setLocalRecipes((prev) => [...prev, { id: recipeId!, name: data.name, ingredients: data.ingredients, imageUrl: data.imageUrl, instructions: data.instructions }]);
         }
       }
     }
@@ -172,7 +193,7 @@ export default function MealsView() {
   };
 
   const doRemoveFromLibrary = (recipeId: string) => {
-    setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+    setLocalRecipes((prev) => prev.filter((r) => r.id !== recipeId));
     if (!skydark?.data?.connection) {
       setLocalMeals((prev) =>
         prev.map((m) => (m.recipeId === recipeId ? { ...m, recipeId: undefined } : m))
@@ -188,7 +209,7 @@ export default function MealsView() {
   };
 
   const doUpdateRecipe = (recipeId: string, data: SaveMealPayload) => {
-    setRecipes((prev) =>
+    setLocalRecipes((prev) =>
       prev.map((r) =>
         r.id === recipeId ? { ...r, name: data.name, ingredients: data.ingredients, imageUrl: data.imageUrl, instructions: data.instructions } : r
       )

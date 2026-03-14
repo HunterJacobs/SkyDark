@@ -137,6 +137,16 @@ export async function fetchRewards(conn: Connection): Promise<{ rewards: Skydark
   return send(conn, { type: "skydark_calendar/get_rewards" });
 }
 
+export interface SkydarkMealRecipe {
+  id: string;
+  name: string;
+  ingredients: { name: string; quantity?: string; unit?: string }[];
+}
+
+export async function fetchMealRecipes(conn: Connection): Promise<{ recipes: SkydarkMealRecipe[] }> {
+  return send(conn, { type: "skydark_calendar/get_meal_recipes" });
+}
+
 /** Normalize backend event to frontend CalendarEvent shape */
 export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
   const calendar_id = e.calendar_id;
