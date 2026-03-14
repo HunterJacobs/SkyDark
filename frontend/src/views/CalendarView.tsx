@@ -72,11 +72,13 @@ export default function CalendarView() {
     const isAdd = !data.id;
     const hasRequired = data.title && data.start_time;
     if (isAdd && hasRequired) {
+      const title = data.title as string;
+      const startTime = data.start_time as string;
       if (conn) {
         try {
           await serviceAddEvent(conn, {
-            title: data.title,
-            start_time: data.start_time,
+            title,
+            start_time: startTime,
             end_time: data.end_time,
             all_day: data.all_day ?? false,
             calendar_id: data.calendar_id?.[0],
@@ -86,17 +88,31 @@ export default function CalendarView() {
           await skydark?.refetchEvents();
         } catch {
           // fallback: optimistic local add when service fails
-          setLocalOverrides((prev) => ({
-            ...prev,
-            events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],
-          }));
+          const newEvent: CalendarEvent = {
+            id: String(Date.now()),
+            title,
+            start_time: startTime,
+            end_time: data.end_time,
+            all_day: data.all_day,
+            description: data.description,
+            location: data.location,
+            calendar_id: data.calendar_id,
+          };
+          setLocalOverrides((prev) => ({ ...prev, events: [...prev.events, newEvent] }));
         }
       } else {
         // No connection: keep event visible locally so add isn't silently dropped
-        setLocalOverrides((prev) => ({
-          ...prev,
-          events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],
-        }));
+        const newEvent: CalendarEvent = {
+          id: String(Date.now()),
+          title,
+          start_time: startTime,
+          end_time: data.end_time,
+          all_day: data.all_day,
+          description: data.description,
+          location: data.location,
+          calendar_id: data.calendar_id,
+        };
+        setLocalOverrides((prev) => ({ ...prev, events: [...prev.events, newEvent] }));
       }
     } else if (data.id) {
       setLocalOverrides((prev) => ({
