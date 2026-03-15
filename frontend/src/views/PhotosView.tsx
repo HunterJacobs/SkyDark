@@ -14,12 +14,19 @@ export default function PhotosView() {
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const newPhotos: PhotoItem[] = files.map((file, idx) => ({
-      id: `upload-${Date.now()}-${idx}`,
-      url: URL.createObjectURL(file),
-      caption: "",
-    }));
-    setPhotos((prev) => [...newPhotos, ...prev]);
+    const maxSizeBytes = 1.5 * 1024 * 1024; // 1.5 MB per image so localStorage stays usable
+    let added = 0;
+    files.forEach((file, idx) => {
+      if (file.size > maxSizeBytes) return;
+      const id = `upload-${Date.now()}-${idx}`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setPhotos((prev) => [{ id, url: dataUrl, caption: "" }, ...prev]);
+        added += 1;
+      };
+      reader.readAsDataURL(file);
+    });
     e.target.value = "";
   };
 

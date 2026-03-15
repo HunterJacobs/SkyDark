@@ -42,7 +42,7 @@ export default function DraggableMealCard({ recipe, onRecipeClick }: DraggableMe
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
-      className="flex-shrink-0 w-28 rounded-xl border-2 border-gray-200 bg-white shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:border-skydark-accent hover:shadow-md transition-all"
+      className="flex-shrink-0 w-44 min-w-[11rem] rounded-xl border-2 border-gray-200 bg-white shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:border-skydark-accent hover:shadow-md transition-all"
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
       <div className="aspect-square w-full bg-gray-100">
@@ -58,7 +58,7 @@ export default function DraggableMealCard({ recipe, onRecipeClick }: DraggableMe
           </div>
         )}
       </div>
-      <p className="p-2 text-xs font-medium text-skydark-text text-center line-clamp-2 break-words min-h-[2rem]" title={recipe.name}>
+      <p className="p-2.5 text-sm font-medium text-skydark-text text-center line-clamp-2 break-words min-h-[2.5rem]" title={recipe.name}>
         {recipe.name}
       </p>
     </div>

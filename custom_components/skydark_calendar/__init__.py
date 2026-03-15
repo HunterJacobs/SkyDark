@@ -114,6 +114,7 @@ _SERVICES = (
     "delete_task",
     "add_points",
     "add_reward",
+    "delete_reward",
     "redeem_reward",
     "add_list_item",
     "create_list",

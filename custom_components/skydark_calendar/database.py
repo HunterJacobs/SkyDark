@@ -658,6 +658,7 @@ class SkydarkDatabase:
         meal_id: str,
         name: str | None = None,
         meal_recipe_id: str | None = None,
+        ingredients: str | None = None,
     ) -> None:
         updates = []
         values: list[Any] = []
@@ -667,6 +668,9 @@ class SkydarkDatabase:
         if meal_recipe_id is not None:
             updates.append("meal_recipe_id = ?")
             values.append(meal_recipe_id)
+        if ingredients is not None:
+            updates.append("ingredients = ?")
+            values.append(ingredients)
         if not updates:
             return
         values.append(meal_id)
@@ -809,6 +813,10 @@ class SkydarkDatabase:
             cur = conn.execute("SELECT * FROM rewards WHERE id = ?", (reward_id,))
             row = cur.fetchone()
             return dict(row) if row else None
+
+    def delete_reward(self, reward_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM rewards WHERE id = ?", (reward_id,))
 
     def redeem_reward(self, member_id: str, reward_id: str) -> bool:
         """Deduct points for reward atomically; returns True if member had enough points."""

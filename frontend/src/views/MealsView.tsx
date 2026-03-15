@@ -8,7 +8,7 @@ import DropTargetMealCell from "../components/Meals/DropTargetMealCell";
 import PinPrompt from "../components/Common/PinPrompt";
 import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceAddMealRecipe, serviceAddMeal, serviceUpdateMeal, serviceDeleteMeal } from "../lib/skyDarkApi";
+import { fetchAddMealRecipe, serviceAddMeal, serviceUpdateMeal, serviceDeleteMeal } from "../lib/skyDarkApi";
 import type { MealSlot, MealRecipe } from "../types/meals";
 import type { SaveMealPayload } from "../components/Meals/MealModal";
 
@@ -37,14 +37,39 @@ function loadRecipes(): MealRecipe[] {
   return [];
 }
 
-function skydarkMealsToSlots(rows: { id: string; name: string; meal_date: string; meal_type: string; meal_recipe_id?: string | null; ingredients?: string | null }[]): MealSlot[] {
+function parseMealIngredients(
+  raw: string | { name: string; quantity?: string; unit?: string }[] | null | undefined
+): { name: string; quantity: string; unit: string }[] | undefined {
+  if (!raw) return undefined;
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return undefined;
+    return raw.map((i) => ({
+      name: i.name ?? "",
+      quantity: (i.quantity as string) ?? "",
+      unit: (i.unit as string) ?? "",
+    }));
+  }
+  try {
+    const parsed = JSON.parse(raw as string);
+    if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+    return parsed.map((i: { name?: string; quantity?: string; unit?: string }) => ({
+      name: i.name ?? "",
+      quantity: (i.quantity as string) ?? "",
+      unit: (i.unit as string) ?? "",
+    }));
+  } catch {
+    return undefined;
+  }
+}
+
+function skydarkMealsToSlots(rows: { id: string; name: string; meal_date: string; meal_type: string; meal_recipe_id?: string | null; ingredients?: string | { name: string; quantity?: string; unit?: string }[] | null }[]): MealSlot[] {
   return rows.map((m) => ({
     id: m.id,
     date: m.meal_date,
     mealType: m.meal_type,
     name: m.name,
     recipeId: m.meal_recipe_id ?? undefined,
-    ingredients: undefined,
+    ingredients: parseMealIngredients(m.ingredients),
   }));
 }
 
@@ -119,11 +144,17 @@ export default function MealsView() {
       // Editing existing meal
       if (conn) {
         try {
-          await serviceUpdateMeal(conn, {
+          const updatePayload: Parameters<typeof serviceUpdateMeal>[1] = {
             meal_id: data.slotId,
             name: data.name,
             meal_recipe_id: editSlot?.recipeId,
-          });
+          };
+          if (!editSlot?.recipeId && data.ingredients.length > 0) {
+            updatePayload.ingredients = JSON.stringify(
+              data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+            );
+          }
+          await serviceUpdateMeal(conn, updatePayload);
           await skydark?.refetchMeals();
         } catch (err) {
           console.error("[SkyDark] Failed to update meal:", err);
@@ -148,20 +179,26 @@ export default function MealsView() {
       // Adding new meal
       if (conn) {
         try {
-          // Save recipe first if requested
+          let meal_recipe_id: string | undefined;
           if (data.saveToLibrary) {
-            await serviceAddMealRecipe(conn, {
+            const { recipe_id } = await fetchAddMealRecipe(conn, {
               name: data.name,
               ingredients: data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity ?? "", unit: i.unit ?? "" })),
             });
+            meal_recipe_id = recipe_id;
             await skydark?.refetchRecipes();
           }
-          // Add the meal to the calendar
-          await serviceAddMeal(conn, {
+          const addPayload: Parameters<typeof serviceAddMeal>[1] = {
             name: data.name,
             meal_date: slotForModal.date,
             meal_type: slotForModal.mealType,
-          });
+          };
+          if (meal_recipe_id) addPayload.meal_recipe_id = meal_recipe_id;
+          else if (data.ingredients.length > 0)
+            addPayload.ingredients = JSON.stringify(
+              data.ingredients.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit }))
+            );
+          await serviceAddMeal(conn, addPayload);
           await skydark?.refetchMeals();
         } catch (err) {
           console.error("[SkyDark] Failed to add meal:", err);

@@ -25,6 +25,7 @@ SERVICE_UPDATE_TASK = "update_task"
 SERVICE_COMPLETE_TASK = "complete_task"
 SERVICE_ADD_POINTS = "add_points"
 SERVICE_ADD_REWARD = "add_reward"
+SERVICE_DELETE_REWARD = "delete_reward"
 SERVICE_REDEEM_REWARD = "redeem_reward"
 SERVICE_ADD_LIST_ITEM = "add_list_item"
 SERVICE_CREATE_LIST = "create_list"
@@ -105,6 +106,13 @@ ADD_POINTS_SCHEMA = vol.Schema(
     extra=vol.PREVENT_EXTRA,
 )
 
+DELETE_REWARD_SCHEMA = vol.Schema(
+    {
+        vol.Required("reward_id"): cv.string,
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+
 REDEEM_REWARD_SCHEMA = vol.Schema(
     {
         vol.Required("member_id"): cv.string,
@@ -166,6 +174,7 @@ UPDATE_MEAL_SCHEMA = vol.Schema(
         vol.Required("meal_id"): cv.string,
         vol.Optional("name"): cv.string,
         vol.Optional("meal_recipe_id"): cv.string,
+        vol.Optional("ingredients"): cv.string,
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -378,6 +387,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except Exception as e:
             _LOGGER.exception("add_reward failed: %s", e)
 
+    async def delete_reward(call: ServiceCall) -> None:
+        """Delete a reward definition."""
+        if DOMAIN not in hass.data:
+            return
+        db = hass.data[DOMAIN].get("db")
+        if not db:
+            return
+        try:
+            await hass.async_add_executor_job(db.delete_reward, call.data["reward_id"])
+        except Exception as e:
+            _LOGGER.exception("delete_reward failed: %s", e)
+
     async def redeem_reward(call: ServiceCall) -> None:
         """Deduct points and redeem a reward for a member."""
         if DOMAIN not in hass.data:
@@ -488,6 +509,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     call.data["meal_id"],
                     name=call.data.get("name"),
                     meal_recipe_id=call.data.get("meal_recipe_id"),
+                    ingredients=call.data.get("ingredients"),
                 )
             )
         except Exception as e:
@@ -591,6 +613,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_REWARD, add_reward, schema=ADD_REWARD_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_DELETE_REWARD, delete_reward, schema=DELETE_REWARD_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_POINTS, add_points, schema=ADD_POINTS_SCHEMA

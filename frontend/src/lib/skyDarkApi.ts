@@ -236,6 +236,13 @@ export async function serviceAddPoints(
   return callService(conn, DOMAIN, "add_points", data);
 }
 
+export async function serviceDeleteReward(
+  conn: Connection,
+  data: { reward_id: string }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_reward", data);
+}
+
 export async function serviceRedeemReward(
   conn: Connection,
   data: { member_id: string; reward_id: string }
@@ -267,6 +274,23 @@ export async function serviceAddMealRecipe(
   });
 }
 
+/** Add a meal recipe via WebSocket and return the new recipe_id (for linking to a meal). */
+export async function fetchAddMealRecipe(
+  conn: Connection,
+  data: { name: string; ingredients?: { name: string; quantity?: string; unit?: string }[] }
+): Promise<{ recipe_id: string }> {
+  const res = await send<{ recipe_id: string }>(conn, {
+    type: "skydark_calendar/add_meal_recipe",
+    name: data.name,
+    ingredients: (data.ingredients ?? []).map((i) => ({
+      name: i.name,
+      quantity: i.quantity ?? "",
+      unit: i.unit ?? "",
+    })),
+  });
+  return res;
+}
+
 export async function serviceAddMeal(
   conn: Connection,
   data: {
@@ -294,6 +318,7 @@ export async function serviceUpdateMeal(
     meal_id: string;
     name?: string;
     meal_recipe_id?: string;
+    ingredients?: string;
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "update_meal", data);

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from functools import partial
@@ -181,7 +182,31 @@ async def websocket_get_meals(
         meals = await hass.async_add_executor_job(
             partial(db.get_meals, start_date=start_date, end_date=end_date)
         )
-        connection.send_result(msg["id"], {"meals": meals})
+
+        def _enrich_meals():
+            out = []
+            for m in meals:
+                row = dict(m)
+                recipe_id = row.get("meal_recipe_id")
+                if recipe_id:
+                    ing_list = db.get_meal_recipe_ingredients(recipe_id)
+                    row["ingredients"] = [
+                        {"name": i.get("name", ""), "quantity": i.get("quantity") or "", "unit": i.get("unit") or ""}
+                        for i in ing_list
+                    ]
+                elif row.get("ingredients"):
+                    try:
+                        parsed = json.loads(row["ingredients"])
+                        row["ingredients"] = parsed if isinstance(parsed, list) else []
+                    except (TypeError, ValueError):
+                        row["ingredients"] = []
+                else:
+                    row["ingredients"] = []
+                out.append(row)
+            return out
+
+        enriched = await hass.async_add_executor_job(_enrich_meals)
+        connection.send_result(msg["id"], {"meals": enriched})
     except Exception as e:
         _LOGGER.exception("websocket get_meals failed: %s", e)
         connection.send_error(msg["id"], "failed", "An error occurred loading meals.")
@@ -305,6 +330,36 @@ async def websocket_get_meal_recipes(
         connection.send_error(msg["id"], "failed", "An error occurred loading recipes.")
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/add_meal_recipe",
+        vol.Required("name"): str,
+        vol.Optional("ingredients", default=[]): list,
+    }
+)
+@websocket_api.async_response
+async def websocket_add_meal_recipe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Add a meal recipe and return its id (for linking to a new meal)."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        name = msg["name"]
+        ingredients = msg.get("ingredients") or []
+        recipe_id = await hass.async_add_executor_job(
+            partial(db.add_meal_recipe, name=name, ingredients=ingredients)
+        )
+        connection.send_result(msg["id"], {"recipe_id": recipe_id})
+    except Exception as e:
+        _LOGGER.exception("websocket add_meal_recipe failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred adding recipe.")
+
+
 async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     """Register WebSocket API handlers (skip if already registered on reload)."""
     if hass.data.get(DOMAIN, {}).get("ws_registered"):
@@ -318,4 +373,5 @@ async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_points)
     websocket_api.async_register_command(hass, websocket_get_rewards)
     websocket_api.async_register_command(hass, websocket_get_meal_recipes)
+    websocket_api.async_register_command(hass, websocket_add_meal_recipe)
     hass.data.setdefault(DOMAIN, {})["ws_registered"] = True

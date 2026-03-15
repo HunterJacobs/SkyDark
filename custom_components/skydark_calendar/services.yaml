@@ -206,6 +206,17 @@ add_reward:
       selector:
         text:
 
+delete_reward:
+  name: Delete reward
+  description: Delete a reward definition.
+  fields:
+    reward_id:
+      name: Reward ID
+      description: ID of the reward to delete
+      required: true
+      selector:
+        text:
+
 redeem_reward:
   name: Redeem reward
   description: Deduct points and redeem a reward for a family member.
@@ -350,6 +361,11 @@ update_meal:
     meal_recipe_id:
       name: Recipe ID
       description: Link to a recipe from the library
+      selector:
+        text:
+    ingredients:
+      name: Ingredients
+      description: Optional ingredients as JSON string (for meals not linked to a recipe)
       selector:
         text:
 

@@ -4,7 +4,7 @@ import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import RewardModal from "../components/Common/RewardModal";
 import FloatingActionButton from "../components/Common/FloatingActionButton";
-import { serviceRedeemReward, serviceAddReward } from "../lib/skyDarkApi";
+import { serviceRedeemReward, serviceAddReward, serviceDeleteReward } from "../lib/skyDarkApi";
 import type { Reward } from "../types/rewards";
 
 const STORAGE_REWARDS = "skydark_rewards";
@@ -112,8 +112,18 @@ export default function RewardsView() {
     }
   };
 
-  const handleDeleteReward = (rewardId: string) => {
-    if (!skydark?.data?.connection) setLocalRewards((prev) => prev.filter((r) => r.id !== rewardId));
+  const handleDeleteReward = async (rewardId: string) => {
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      try {
+        await serviceDeleteReward(conn, { reward_id: rewardId });
+        await skydark?.refetch();
+      } catch {
+        // leave as-is on error
+      }
+    } else {
+      setLocalRewards((prev) => prev.filter((r) => r.id !== rewardId));
+    }
     setAddModalOpen(false);
   };
 

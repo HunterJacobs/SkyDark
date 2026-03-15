@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns";
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek } from "date-fns";
 import MonthView from "../components/Calendar/MonthView";
 import WeekView, { type WeekViewRef } from "../components/Calendar/WeekView";
 import DayView, { type DayViewRef } from "../components/Calendar/DayView";
@@ -190,7 +190,13 @@ export default function CalendarView() {
         <div className="flex items-center gap-2">
           <select
             value={viewMode}
-            onChange={(e) => setViewMode(e.target.value as "month" | "week" | "day")}
+            onChange={(e) => {
+              const mode = e.target.value as "month" | "week" | "day";
+              setViewMode(mode);
+              const now = new Date();
+              if (mode === "week") setCurrentDate(startOfWeek(now));
+              else if (mode === "day") setCurrentDate(now);
+            }}
             className="input-skydark"
           >
             <option value="month">Month</option>

@@ -18,7 +18,7 @@ function ShoppingIcon() {
   );
 }
 
-const navItems = [
+export const navItems = [
   { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
   { path: "/lists", label: "Lists", Icon: ListsIcon },
   { path: "/tasks", label: "Chores", Icon: CheckIcon },

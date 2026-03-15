@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import MobileNav from "./MobileNav";
 import Header from "./Header";
 import { useAppContext } from "../../contexts/AppContext";
 import { usePhotosContext } from "../../contexts/PhotosContext";
@@ -263,6 +264,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
     >
       <Sidebar />
       <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+        <MobileNav />
         <Header />
         <main
           className={`flex-1 p-5 sm:p-6 min-h-0 ${
