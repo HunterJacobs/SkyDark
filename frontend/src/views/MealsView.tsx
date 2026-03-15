@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 import MealModal from "../components/Meals/MealModal";
 import DraggableMealCard from "../components/Meals/DraggableMealCard";
 import DropTargetMealCell from "../components/Meals/DropTargetMealCell";
@@ -91,6 +92,10 @@ export default function MealsView() {
   const skydark = useSkydarkDataContext();
   const { runIfUnlocked, pinPromptProps } = usePinGate();
   const weekStart = startOfDay(new Date());
+  const isTouchDevice =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  const dndBackend = isTouchDevice ? TouchBackend : HTML5Backend;
   const [localMeals, setLocalMeals] = useState<MealSlot[]>(loadMeals);
   const [localRecipes, setLocalRecipes] = useState<MealRecipe[]>(loadRecipes);
 
@@ -388,7 +393,10 @@ export default function MealsView() {
   }, [meals, recipes]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    <DndProvider
+      backend={dndBackend}
+      options={isTouchDevice ? { enableMouseEvents: true } : undefined}
+    >
     <div className="h-full">
       <h2 className="text-lg font-semibold text-skydark-text mb-4">Meals</h2>
 

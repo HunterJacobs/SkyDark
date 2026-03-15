@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { usePhotosContext, type PhotoItem } from "../contexts/PhotosContext";
+import { usePhotosContext } from "../contexts/PhotosContext";
 import { useAppContext } from "../contexts/AppContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import CloseIcon from "../components/Common/CloseIcon";
