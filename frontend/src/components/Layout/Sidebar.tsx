@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import {
-  LogoIcon,
   CalendarIcon,
   ListsIcon,
   CheckIcon,
@@ -9,6 +8,7 @@ import {
   PhotosIcon,
   SettingsIcon,
 } from "./SidebarIcons";
+import skydarkLogo from "../../assets/skydark-logo.png";
 
 function ShoppingIcon() {
   return (
@@ -36,8 +36,8 @@ export default function Sidebar() {
       style={{ width: 80 }}
       aria-label="Main navigation"
     >
-      <div className="mb-4 flex items-center justify-center text-skydark-accent" aria-hidden>
-        <LogoIcon className="w-8 h-8" />
+      <div className="mb-4 flex items-center justify-center" aria-hidden>
+        <img src={skydarkLogo} alt="" className="w-10 h-10 rounded-full object-cover" />
       </div>
       <nav className="flex flex-col items-center gap-1 w-full" aria-label="Main">
         {navItems.map(({ path, label, Icon }) => (
