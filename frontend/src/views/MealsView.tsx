@@ -117,6 +117,9 @@ export default function MealsView() {
   const dndBackend = isTouchDevice ? TouchBackend : HTML5Backend;
   const [localMeals, setLocalMeals] = useState<MealSlot[]>(loadMeals);
   const [localRecipes, setLocalRecipes] = useState<MealRecipe[]>(loadRecipes);
+  const [optimisticallyRemovedMealIds, setOptimisticallyRemovedMealIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const serverMeals = useMemo(() => {
     if (!skydark?.data?.connection || !skydark.data.meals) return [];
@@ -130,6 +133,10 @@ export default function MealsView() {
 
   const meals = skydark?.data?.connection ? serverMeals : localMeals;
   const recipes = skydark?.data?.connection ? serverRecipes : localRecipes;
+  const visibleMeals = useMemo(
+    () => meals.filter((m) => !optimisticallyRemovedMealIds.has(m.id)),
+    [meals, optimisticallyRemovedMealIds]
+  );
 
   useEffect(() => {
     if (!skydark?.data?.connection) try { localStorage.setItem(STORAGE_MEALS, JSON.stringify(localMeals)); } catch { /* ignore */ }
@@ -285,10 +292,29 @@ export default function MealsView() {
   const doRemoveMeal = async (slotId: string) => {
     const conn = skydark?.data?.connection;
     if (conn) {
+      setOptimisticallyRemovedMealIds((prev) => {
+        const next = new Set(prev);
+        next.add(slotId);
+        return next;
+      });
+      let deletedOnServer = false;
       try {
         await serviceDeleteMeal(conn, { meal_id: slotId });
+        deletedOnServer = true;
         await skydark?.refetchMeals();
+        setOptimisticallyRemovedMealIds((prev) => {
+          const next = new Set(prev);
+          next.delete(slotId);
+          return next;
+        });
       } catch (err) {
+        if (!deletedOnServer) {
+          setOptimisticallyRemovedMealIds((prev) => {
+            const next = new Set(prev);
+            next.delete(slotId);
+            return next;
+          });
+        }
         console.error("[SkyDark] Failed to delete meal:", err);
       }
     } else {
@@ -341,7 +367,7 @@ export default function MealsView() {
 
   const doDropFromPopular = async (recipe: MealRecipe, date: string, mealType: string) => {
     const conn = skydark?.data?.connection;
-    const existingSlot = meals.find((m) => m.date === date && m.mealType === mealType);
+    const existingSlot = visibleMeals.find((m) => m.date === date && m.mealType === mealType);
     if (conn) {
       try {
         if (existingSlot) {
@@ -404,7 +430,7 @@ export default function MealsView() {
     recipes.forEach((r) => {
       useCountByRecipeId[r.id] = 0;
     });
-    meals.forEach((m) => {
+    visibleMeals.forEach((m) => {
       if (m.recipeId && useCountByRecipeId[m.recipeId] !== undefined) {
         useCountByRecipeId[m.recipeId]++;
       } else if (m.name) {
@@ -413,9 +439,10 @@ export default function MealsView() {
       }
     });
     return [...recipes]
+      .filter((r) => (useCountByRecipeId[r.id] ?? 0) > 0)
       .sort((a, b) => (useCountByRecipeId[b.id] ?? 0) - (useCountByRecipeId[a.id] ?? 0))
       .slice(0, 14);
-  }, [meals, recipes]);
+  }, [visibleMeals, recipes]);
 
   return (
     <DndProvider
@@ -450,7 +477,7 @@ export default function MealsView() {
                 <td className="p-3 text-skydark-text font-medium">{mealType}</td>
                 {weekDates.map((d) => {
                   const dateStr = format(d, "yyyy-MM-dd");
-                  const slot = meals.find(
+                  const slot = visibleMeals.find(
                     (m) => m.date === dateStr && m.mealType === mealType
                   );
                   return (
@@ -503,8 +530,8 @@ export default function MealsView() {
       <p className="text-sm text-skydark-text-secondary mb-2">
         Drag a meal to a day slot above to add it to your plan.
       </p>
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-3 min-w-max">
+      <div className="pb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {popularMeals.map((recipe) => (
             <DraggableMealCard
               key={recipe.id}
@@ -513,6 +540,11 @@ export default function MealsView() {
             />
           ))}
         </div>
+        {popularMeals.length === 0 && (
+          <p className="text-sm text-skydark-text-secondary mt-2">
+            No popular meals yet. Add a few meals to start building favorites.
+          </p>
+        )}
       </div>
 
       <MealModal

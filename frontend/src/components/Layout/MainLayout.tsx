@@ -291,7 +291,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         >
           {children}
         </main>
-        {isPortrait && <MobileNav position="bottom" forceVisible />}
+        {isPortrait && <MobileNav position="bottom" forceVisible iconOnly />}
       </div>
       <ScreenSaverOverlay />
     </div>

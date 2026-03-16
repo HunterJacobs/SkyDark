@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useAppContext } from "../contexts/AppContext";
 
 export interface WeeklyDay {
@@ -17,6 +17,12 @@ export interface CurrentWeather {
 interface WeatherData {
   current: CurrentWeather | null;
   weekly: WeeklyDay[];
+}
+
+interface WeatherDataWithMeta extends WeatherData {
+  locationLabel: string | null;
+  refreshing: boolean;
+  refresh: () => void;
 }
 
 /** Map condition to a short display icon (emoji for no extra deps). */
@@ -105,19 +111,29 @@ function normalizeUsZip(rawZip: string | undefined): string | null {
   return match ? match[0] : null;
 }
 
-async function getCoordsFromZip(zip: string): Promise<{ lat: number; lon: number } | null> {
+async function getCoordsFromZip(
+  zip: string
+): Promise<{ lat: number; lon: number; locationLabel: string | null } | null> {
   try {
     const response = await fetch(`https://api.zippopotam.us/us/${zip}`);
     if (!response.ok) return null;
     const json = (await response.json()) as {
-      places?: Array<{ latitude?: string; longitude?: string }>;
+      places?: Array<{
+        latitude?: string;
+        longitude?: string;
+        "place name"?: string;
+        "state abbreviation"?: string;
+      }>;
     };
     const firstPlace = json.places?.[0];
     if (!firstPlace?.latitude || !firstPlace?.longitude) return null;
     const lat = Number.parseFloat(firstPlace.latitude);
     const lon = Number.parseFloat(firstPlace.longitude);
     if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
-    return { lat, lon };
+    const city = firstPlace["place name"]?.trim();
+    const state = firstPlace["state abbreviation"]?.trim();
+    const locationLabel = city && state ? `${city}, ${state}` : null;
+    return { lat, lon, locationLabel };
   } catch {
     return null;
   }
@@ -166,15 +182,22 @@ function forecastFromOpenMeteo(payload: {
   return { current, weekly };
 }
 
-export function useWeatherData(): WeatherData {
+export function useWeatherData(): WeatherDataWithMeta {
   const { settings } = useAppContext();
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
   const weatherZipCode = settings.weatherZipCode;
+  const refresh = useCallback(() => {
+    setRefreshTick((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     const fetchWeather = async () => {
+      if (mounted) setRefreshing(true);
       try {
         const normalizedZip = normalizeUsZip(weatherZipCode);
         const zipCoords = normalizedZip ? await getCoordsFromZip(normalizedZip) : null;
@@ -203,9 +226,17 @@ export function useWeatherData(): WeatherData {
           };
         };
         const parsed = forecastFromOpenMeteo(json);
-        if (mounted && parsed) setWeatherData(parsed);
+        if (mounted) {
+          if (parsed) setWeatherData(parsed);
+          setLocationLabel(zipCoords?.locationLabel ?? null);
+        }
       } catch {
-        if (mounted) setWeatherData(null);
+        if (mounted) {
+          setWeatherData(null);
+          setLocationLabel(null);
+        }
+      } finally {
+        if (mounted) setRefreshing(false);
       }
     };
 
@@ -215,16 +246,26 @@ export function useWeatherData(): WeatherData {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [weatherZipCode]);
+  }, [weatherZipCode, refreshTick]);
 
   return useMemo(() => {
-    if (weatherData) return weatherData;
+    if (weatherData) {
+      return {
+        ...weatherData,
+        locationLabel,
+        refreshing,
+        refresh,
+      };
+    }
     const weekly = buildMockWeeklyForecast();
     return {
       current: { temperature: weekly[0].tempMax, condition: weekly[0].condition },
       weekly,
+      locationLabel,
+      refreshing,
+      refresh,
     };
-  }, [weatherData]);
+  }, [weatherData, locationLabel, refreshing, refresh]);
 }
 
 export function useCurrentWeather(): CurrentWeather | null {

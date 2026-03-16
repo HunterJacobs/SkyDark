@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react";
+import { useState, ReactNode, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface FABItem {
@@ -13,9 +13,27 @@ interface FloatingActionButtonProps {
 
 export default function FloatingActionButton({ items }: FloatingActionButtonProps) {
   const [open, setOpen] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia("(orientation: portrait)");
+    const updateOrientation = () => setIsPortrait(mediaQuery.matches);
+    updateOrientation();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateOrientation);
+      return () => mediaQuery.removeEventListener("change", updateOrientation);
+    }
+    mediaQuery.addListener(updateOrientation);
+    return () => mediaQuery.removeListener(updateOrientation);
+  }, []);
 
   return (
-    <div className="fixed bottom-8 right-8 z-30 flex flex-col-reverse items-end gap-2">
+    <div
+      className={`fixed right-6 sm:right-8 z-30 flex flex-col-reverse items-end gap-2 ${
+        isPortrait ? "bottom-24" : "bottom-8"
+      }`}
+    >
       <AnimatePresence>
         {open &&
           items.map((item, i) => (

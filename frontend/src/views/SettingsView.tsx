@@ -18,6 +18,7 @@ import {
 } from "../components/Settings/SettingsIcons";
 import { useViewportSimulator } from "../contexts/ViewportSimulatorContext";
 import { VIEWPORT_PRESETS } from "../lib/viewportPresets";
+import { useWeatherData } from "../hooks/useWeeklyWeather";
 
 export default function SettingsView() {
   const {
@@ -33,6 +34,7 @@ export default function SettingsView() {
   } = useAppContext();
   const navigate = useNavigate();
   const viewportSimulator = useViewportSimulator();
+  const weather = useWeatherData();
   const pendingPinActionRef = useRef<(() => void) | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
   const [showDisableLockPrompt, setShowDisableLockPrompt] = useState(false);
@@ -214,13 +216,28 @@ export default function SettingsView() {
             <SettingsSection title="Display" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <div className="py-3">
                 <label className="block text-sm font-medium text-skydark-text mb-1.5">Weather ZIP code (US)</label>
-                <input
-                  type="tel"
-                  value={settings.weatherZipCode ?? ""}
-                  onChange={(e) => setSettings({ weatherZipCode: e.target.value })}
-                  placeholder="12345"
-                  className="input-skydark max-w-md"
-                />
+                <div className="flex items-center gap-2 max-w-md">
+                  <input
+                    type="tel"
+                    value={settings.weatherZipCode ?? ""}
+                    onChange={(e) => setSettings({ weatherZipCode: e.target.value })}
+                    placeholder="12345"
+                    className="input-skydark flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => weather.refresh()}
+                    disabled={weather.refreshing}
+                    className="btn-secondary whitespace-nowrap disabled:opacity-60"
+                  >
+                    {weather.refreshing ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+                {weather.locationLabel && (
+                  <p className="mt-1 text-xs text-skydark-text-secondary">
+                    {weather.locationLabel}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-skydark-text-secondary">
                   Leave blank to use device location.
                 </p>

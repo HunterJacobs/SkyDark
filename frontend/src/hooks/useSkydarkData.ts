@@ -192,8 +192,9 @@ export function useSkydarkData(
             .slice(0, 10);
         const res = await fetchMeals(conn, start, end);
         setData((prev) => ({ ...prev, meals: res.meals ?? [] }));
-      } catch {
-        // keep previous meals
+      } catch (e) {
+        console.error("[SkyDark] Failed to refresh meals:", e);
+        throw e instanceof Error ? e : new Error("Failed to refresh meals");
       }
     },
     [data.connection, eventRangeDays],
