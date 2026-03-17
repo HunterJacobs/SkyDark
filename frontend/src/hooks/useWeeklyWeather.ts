@@ -257,7 +257,6 @@ export function useWeatherData(): WeatherDataWithMeta {
           "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
         );
         url.searchParams.set("temperature_unit", "fahrenheit");
-        url.searchParams.set("precipitation_unit", "percent");
         url.searchParams.set("timezone", "auto");
         const response = await fetch(url.toString());
         if (!response.ok) throw new Error(`Weather fetch failed: ${response.status}`);
