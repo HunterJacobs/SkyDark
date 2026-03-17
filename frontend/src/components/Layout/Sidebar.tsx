@@ -36,8 +36,8 @@ export default function Sidebar() {
       style={{ width: 80 }}
       aria-label="Main navigation"
     >
-      <div className="mb-4 flex items-center justify-center" aria-hidden>
-        <img src={skydarkLogo} alt="" className="w-10 h-10 rounded-full object-cover" />
+      <div className="mb-4 flex items-center justify-center w-12 h-12" aria-hidden>
+        <img src={skydarkLogo} alt="" className="max-w-full max-h-full object-contain" />
       </div>
       <nav className="flex flex-col items-center gap-1 w-full" aria-label="Main">
         {navItems.map(({ path, label, Icon }) => (

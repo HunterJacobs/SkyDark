@@ -10,14 +10,20 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import type { FamilyMember } from "../types/calendar";
 import { useSkydarkDataContext } from "./SkydarkDataContext";
+import {
+  addFamilyMemberWS,
+  deleteFamilyMemberWS,
+  saveAppSettings,
+  updateFamilyMemberWS,
+} from "../lib/skyDarkApi";
 
-const STORAGE_KEY_MEMBERS = "skydark_family_members";
 const STORAGE_KEY_SETTINGS = "skydark_app_settings";
-const STORAGE_KEY_AUTH = "skydark_pin_authenticated";
+const STORAGE_KEY_MEMBERS = "skydark_family_members";
 
 const DEFAULT_MEMBERS: FamilyMember[] = [
   { id: "1", name: "Mom", color: "#FFD4D4", initial: "M" },
@@ -149,106 +155,87 @@ function isValidMember(m: unknown): m is FamilyMember {
   );
 }
 
-function loadMembers(): FamilyMember[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_MEMBERS);
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const valid = parsed.filter(isValidMember);
-        if (valid.length > 0) {
-          return valid.map((m) => ({
-            ...m,
-            initial: m.initial ?? String(m.name).charAt(0).toUpperCase(),
-          }));
-        }
-      }
-    }
-  } catch {
-    // ignore
+function normalizeSettings(candidate: Partial<AppSettings> | null | undefined): AppSettings {
+  const merged = { ...DEFAULT_SETTINGS, ...(candidate ?? {}) };
+  if (!merged.lockedFeatures) {
+    merged.lockedFeatures = { ...DEFAULT_LOCKED_FEATURES };
+  } else {
+    merged.lockedFeatures = { ...DEFAULT_LOCKED_FEATURES, ...merged.lockedFeatures };
   }
-  return DEFAULT_MEMBERS;
-}
-
-function loadSettings(): AppSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<AppSettings>;
-      const merged = { ...DEFAULT_SETTINGS, ...parsed };
-      if (!merged.lockedFeatures) {
-        merged.lockedFeatures = { ...DEFAULT_LOCKED_FEATURES };
-      } else {
-        merged.lockedFeatures = { ...DEFAULT_LOCKED_FEATURES, ...merged.lockedFeatures };
-      }
-      if (typeof merged.lockEnabled !== "boolean") merged.lockEnabled = false;
-      if (typeof merged.autoRelockEnabled !== "boolean") merged.autoRelockEnabled = false;
-      if (typeof merged.autoRelockMinutes !== "number" || merged.autoRelockMinutes < 1 || merged.autoRelockMinutes > 60) {
-        merged.autoRelockMinutes = 5;
-      }
-      if (typeof merged.familyName !== "string" || !merged.familyName.trim()) {
-        merged.familyName = DEFAULT_SETTINGS.familyName;
-      }
-      return merged;
-    }
-  } catch {
-    // ignore
+  if (typeof merged.lockEnabled !== "boolean") merged.lockEnabled = false;
+  if (typeof merged.autoRelockEnabled !== "boolean") merged.autoRelockEnabled = false;
+  if (
+    typeof merged.autoRelockMinutes !== "number" ||
+    merged.autoRelockMinutes < 1 ||
+    merged.autoRelockMinutes > 60
+  ) {
+    merged.autoRelockMinutes = 5;
   }
-  return DEFAULT_SETTINGS;
-}
-
-function loadAuthenticated(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY_AUTH) === "1";
-  } catch {
-    return false;
+  if (typeof merged.familyName !== "string" || !merged.familyName.trim()) {
+    merged.familyName = DEFAULT_SETTINGS.familyName;
   }
+  return merged;
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const skydark = useSkydarkDataContext();
-  const [familyMembers, setFamilyMembersState] = useState<FamilyMember[]>(loadMembers);
-  const [settings, setSettingsState] = useState<AppSettings>(loadSettings);
-  const [isAuthenticated, setAuthenticatedState] = useState(loadAuthenticated);
+  const [familyMembers, setFamilyMembersState] = useState<FamilyMember[]>(DEFAULT_MEMBERS);
+  const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [isAuthenticated, setAuthenticatedState] = useState(false);
   const [screensaverTriggered, setScreensaverTriggered] = useState(false);
   const [isLocked, setIsLockedState] = useState(false);
+  const didMigrateLegacyLocalRef = useRef(false);
 
-  // Seed family members and family name from HA when WebSocket data is available
+  // Seed shared state from HA-backed WebSocket data.
   useEffect(() => {
     if (!skydark?.data?.connection) return;
     if (Array.isArray(skydark.data.familyMembers) && skydark.data.familyMembers.length > 0) {
       const valid = skydark.data.familyMembers.filter((m) => isValidMember(m));
       if (valid.length > 0) setFamilyMembersState(valid);
     }
-    const familyName = skydark.data.config?.family_name;
-    if (typeof familyName === "string" && familyName.trim()) {
-      setSettingsState((prev) => ({ ...prev, familyName: familyName.trim() }));
+    if (skydark.data.appSettings && typeof skydark.data.appSettings === "object") {
+      setSettingsState(normalizeSettings(skydark.data.appSettings as Partial<AppSettings>));
     }
-  }, [skydark?.data?.connection, skydark?.data?.familyMembers, skydark?.data?.config?.family_name]);
+  }, [skydark?.data?.connection, skydark?.data?.familyMembers, skydark?.data?.appSettings]);
 
+  // One-time migration: copy old local settings/members into backend settings once connected.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_MEMBERS, JSON.stringify(familyMembers));
-    } catch {
-      // QuotaExceededError or private browsing; avoid crashing the app
-    }
-  }, [familyMembers]);
+    if (didMigrateLegacyLocalRef.current) return;
+    const conn = skydark?.data?.connection;
+    if (!conn) return;
+    didMigrateLegacyLocalRef.current = true;
 
-  useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+      const rawSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+      const rawMembers = localStorage.getItem(STORAGE_KEY_MEMBERS);
+      if (rawSettings || rawMembers) {
+        if (rawSettings) {
+          const parsed = JSON.parse(rawSettings) as Partial<AppSettings>;
+          const merged = normalizeSettings(parsed);
+          setSettingsState(merged);
+          void saveAppSettings(conn, merged as unknown as Record<string, unknown>);
+        }
+        if (rawMembers) {
+          const parsedMembers = JSON.parse(rawMembers) as unknown;
+          if (Array.isArray(parsedMembers)) {
+            const valid = parsedMembers.filter(isValidMember);
+            if (valid.length > 0) {
+              setFamilyMembersState(valid);
+            }
+          }
+        }
+      }
     } catch {
-      // QuotaExceededError or private browsing
+      // Ignore bad local migration payloads.
+    } finally {
+      try {
+        localStorage.removeItem(STORAGE_KEY_SETTINGS);
+        localStorage.removeItem(STORAGE_KEY_MEMBERS);
+      } catch {
+        // ignore
+      }
     }
-  }, [settings]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_AUTH, isAuthenticated ? "1" : "0");
-    } catch {
-      // QuotaExceededError or private browsing
-    }
-  }, [isAuthenticated]);
+  }, [skydark?.data?.connection]);
 
   const setFamilyMembers = useCallback(
     (value: FamilyMember[] | ((prev: FamilyMember[]) => FamilyMember[])) => {
@@ -264,23 +251,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id,
       initial: member.initial ?? member.name.charAt(0).toUpperCase(),
     };
-    setFamilyMembersState((prev) => [...prev, newMember]);
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      void addFamilyMemberWS(conn, {
+        name: newMember.name,
+        color: newMember.color,
+        initial: newMember.initial,
+      })
+        .then((res) => {
+          const saved = res.family_member;
+          if (!saved?.id) return;
+          setFamilyMembersState((prev) => [...prev, {
+            id: String(saved.id),
+            name: String(saved.name ?? newMember.name),
+            color: String(saved.color ?? newMember.color),
+            initial: String(saved.initial ?? newMember.initial ?? newMember.name.charAt(0).toUpperCase()),
+          }]);
+        })
+        .catch(() => {
+          setFamilyMembersState((prev) => [...prev, newMember]);
+        });
+    } else {
+      setFamilyMembersState((prev) => [...prev, newMember]);
+    }
     return newMember;
-  }, []);
+  }, [skydark?.data?.connection]);
 
   const updateFamilyMember = useCallback((id: string, updates: Partial<FamilyMember>) => {
     setFamilyMembersState((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
     );
-  }, []);
+    const conn = skydark?.data?.connection;
+    if (!conn) return;
+    void updateFamilyMemberWS(conn, {
+      member_id: id,
+      name: updates.name,
+      color: updates.color,
+      initial: updates.initial,
+    });
+  }, [skydark?.data?.connection]);
 
   const removeFamilyMember = useCallback((id: string) => {
     setFamilyMembersState((prev) => prev.filter((m) => m.id !== id));
-  }, []);
+    const conn = skydark?.data?.connection;
+    if (!conn) return;
+    void deleteFamilyMemberWS(conn, id);
+  }, [skydark?.data?.connection]);
 
   const setSettings = useCallback((updates: Partial<AppSettings>) => {
-    setSettingsState((prev) => ({ ...prev, ...updates }));
-  }, []);
+    setSettingsState((prev) => {
+      const next = normalizeSettings({ ...prev, ...updates });
+      const conn = skydark?.data?.connection;
+      if (conn) {
+        void saveAppSettings(conn, next as unknown as Record<string, unknown>);
+      }
+      return next;
+    });
+  }, [skydark?.data?.connection]);
 
   const setAuthenticated = useCallback((value: boolean) => {
     setAuthenticatedState(value);

@@ -158,6 +158,109 @@ async def websocket_get_family_members(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): "skydark_calendar/add_family_member",
+        vol.Required("name"): str,
+        vol.Required("color"): str,
+        vol.Optional("initial"): str,
+        vol.Optional("avatar_url"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_add_family_member(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Create a family member and return its full row."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        member_id = await hass.async_add_executor_job(
+            partial(
+                db.add_family_member,
+                name=msg["name"],
+                color=msg["color"],
+                initial=msg.get("initial"),
+                avatar_url=msg.get("avatar_url"),
+            )
+        )
+        members = await hass.async_add_executor_job(db.get_family_members)
+        member = next((m for m in members if m.get("id") == member_id), None)
+        connection.send_result(msg["id"], {"family_member": member or {"id": member_id}})
+    except Exception as e:
+        _LOGGER.exception("websocket add_family_member failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred adding family member.")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/update_family_member",
+        vol.Required("member_id"): str,
+        vol.Optional("name"): str,
+        vol.Optional("color"): str,
+        vol.Optional("initial"): str,
+        vol.Optional("avatar_url"): str,
+        vol.Optional("sort_order"): int,
+    }
+)
+@websocket_api.async_response
+async def websocket_update_family_member(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Update mutable fields for a family member."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        await hass.async_add_executor_job(
+            partial(
+                db.update_family_member,
+                msg["member_id"],
+                name=msg.get("name"),
+                color=msg.get("color"),
+                initial=msg.get("initial"),
+                avatar_url=msg.get("avatar_url"),
+                sort_order=msg.get("sort_order"),
+            )
+        )
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as e:
+        _LOGGER.exception("websocket update_family_member failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred updating family member.")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/delete_family_member",
+        vol.Required("member_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_delete_family_member(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Delete a family member by id."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        await hass.async_add_executor_job(db.delete_family_member, msg["member_id"])
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as e:
+        _LOGGER.exception("websocket delete_family_member failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred deleting family member.")
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): "skydark_calendar/get_meals",
         vol.Optional("start_date"): str,
         vol.Optional("end_date"): str,
@@ -397,6 +500,69 @@ async def websocket_delete_reward(
         connection.send_error(msg["id"], "failed", "An error occurred deleting the reward.")
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/get_app_settings",
+    }
+)
+@websocket_api.async_response
+async def websocket_get_app_settings(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return app settings blob stored in DB (shared across devices)."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        settings = await hass.async_add_executor_job(db.get_settings)
+        raw_blob = settings.get("frontend_app_settings_v1", "{}")
+        parsed_blob: dict[str, Any] = {}
+        try:
+            candidate = json.loads(raw_blob)
+            if isinstance(candidate, dict):
+                parsed_blob = candidate
+        except (TypeError, ValueError):
+            parsed_blob = {}
+        connection.send_result(msg["id"], {"settings": parsed_blob})
+    except Exception as e:
+        _LOGGER.exception("websocket get_app_settings failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred loading app settings.")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/set_app_settings",
+        vol.Required("settings"): dict,
+    }
+)
+@websocket_api.async_response
+async def websocket_set_app_settings(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Persist app settings blob in DB (shared across devices)."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        settings_blob = msg.get("settings", {})
+        if not isinstance(settings_blob, dict):
+            connection.send_error(msg["id"], "invalid_format", "settings must be an object")
+            return
+        await hass.async_add_executor_job(
+            db.save_setting, "frontend_app_settings_v1", json.dumps(settings_blob)
+        )
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as e:
+        _LOGGER.exception("websocket set_app_settings failed: %s", e)
+        connection.send_error(msg["id"], "failed", "An error occurred saving app settings.")
+
+
 async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     """Register WebSocket API handlers (skip if already registered on reload)."""
     if hass.data.get(DOMAIN, {}).get("ws_registered"):
@@ -405,8 +571,13 @@ async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_tasks)
     websocket_api.async_register_command(hass, websocket_get_lists)
     websocket_api.async_register_command(hass, websocket_get_family_members)
+    websocket_api.async_register_command(hass, websocket_add_family_member)
+    websocket_api.async_register_command(hass, websocket_update_family_member)
+    websocket_api.async_register_command(hass, websocket_delete_family_member)
     websocket_api.async_register_command(hass, websocket_get_meals)
     websocket_api.async_register_command(hass, websocket_get_config)
+    websocket_api.async_register_command(hass, websocket_get_app_settings)
+    websocket_api.async_register_command(hass, websocket_set_app_settings)
     websocket_api.async_register_command(hass, websocket_get_points)
     websocket_api.async_register_command(hass, websocket_get_rewards)
     websocket_api.async_register_command(hass, websocket_delete_reward)

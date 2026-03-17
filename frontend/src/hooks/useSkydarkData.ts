@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getHAConnection } from "../lib/haConnection";
 import type { Connection } from "home-assistant-js-websocket";
 import {
+  fetchAppSettings,
   fetchConfig,
   fetchEvents,
   fetchFamilyMembers,
@@ -44,6 +45,7 @@ export interface SkydarkDataState {
     weather_entity?: string;
     panel_url?: string;
   } | null;
+  appSettings: Record<string, unknown> | null;
   pointsByMember: Record<string, number>;
   rewards: SkydarkReward[];
   loading: boolean;
@@ -60,6 +62,7 @@ const initialState: SkydarkDataState = {
   mealRecipes: [],
   familyMembers: [],
   config: null,
+  appSettings: null,
   pointsByMember: {},
   rewards: [],
   loading: true,
@@ -93,6 +96,7 @@ export function useSkydarkData(
         recipesRes,
         familyRes,
         configRes,
+        appSettingsRes,
         pointsRes,
         rewardsRes,
       ] = await Promise.all([
@@ -103,6 +107,7 @@ export function useSkydarkData(
         fetchMealRecipes(conn),
         fetchFamilyMembers(conn),
         fetchConfig(conn),
+        fetchAppSettings(conn),
         fetchPoints(conn),
         fetchRewards(conn),
       ]);
@@ -132,6 +137,10 @@ export function useSkydarkData(
           ? familyRes.family_members
           : [],
         config,
+        appSettings:
+          appSettingsRes.settings && typeof appSettingsRes.settings === "object"
+            ? appSettingsRes.settings
+            : {},
         pointsByMember: pointsRes.points_by_member ?? {},
         rewards: rewardsRes.rewards ?? [],
         loading: false,

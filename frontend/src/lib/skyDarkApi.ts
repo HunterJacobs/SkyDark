@@ -124,6 +124,19 @@ export async function fetchConfig(conn: Connection): Promise<{
   return send(conn, { type: "skydark_calendar/get_config" });
 }
 
+export async function fetchAppSettings(conn: Connection): Promise<{
+  settings?: Record<string, unknown>;
+}> {
+  return send(conn, { type: "skydark_calendar/get_app_settings" });
+}
+
+export async function saveAppSettings(
+  conn: Connection,
+  settings: Record<string, unknown>
+): Promise<{ success: boolean }> {
+  return send(conn, { type: "skydark_calendar/set_app_settings", settings });
+}
+
 export async function fetchPoints(conn: Connection): Promise<{ points_by_member: Record<string, number> }> {
   return send(conn, { type: "skydark_calendar/get_points" });
 }
@@ -344,6 +357,34 @@ export async function serviceAddMeal(
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "add_meal", data);
+}
+
+export async function addFamilyMemberWS(
+  conn: Connection,
+  data: { name: string; color: string; initial?: string; avatar_url?: string }
+): Promise<{ family_member: FamilyMember & { avatar_url?: string | null; sort_order?: number | null } }> {
+  return send(conn, { type: "skydark_calendar/add_family_member", ...data });
+}
+
+export async function updateFamilyMemberWS(
+  conn: Connection,
+  data: {
+    member_id: string;
+    name?: string;
+    color?: string;
+    initial?: string;
+    avatar_url?: string;
+    sort_order?: number;
+  }
+): Promise<{ success: boolean }> {
+  return send(conn, { type: "skydark_calendar/update_family_member", ...data });
+}
+
+export async function deleteFamilyMemberWS(
+  conn: Connection,
+  memberId: string
+): Promise<{ success: boolean }> {
+  return send(conn, { type: "skydark_calendar/delete_family_member", member_id: memberId });
 }
 
 export async function serviceDeleteTask(

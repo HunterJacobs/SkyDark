@@ -107,11 +107,14 @@ function getCurrentPosition(): Promise<{ lat: number; lon: number }> {
 function normalizeUsZip(rawZip: string | undefined): string | null {
   if (!rawZip) return null;
   const cleaned = rawZip.trim();
-  const match = cleaned.match(/^\d{5}$/);
-  return match ? match[0] : null;
+  // Accept both 5-digit ZIP and ZIP+4 (with or without hyphen),
+  // then normalize to the 5-digit base ZIP for lookup.
+  const normalized = cleaned.replace(/\s+/g, "");
+  const fiveDigit = normalized.match(/^(\d{5})(?:-\d{4}|\d{4})?$/);
+  return fiveDigit ? fiveDigit[1] : null;
 }
 
-async function getCoordsFromZip(
+async function getCoordsFromZippopotam(
   zip: string
 ): Promise<{ lat: number; lon: number; locationLabel: string | null } | null> {
   try {
@@ -137,6 +140,49 @@ async function getCoordsFromZip(
   } catch {
     return null;
   }
+}
+
+async function getCoordsFromOpenMeteoGeocoding(
+  zip: string
+): Promise<{ lat: number; lon: number; locationLabel: string | null } | null> {
+  try {
+    const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
+    url.searchParams.set("name", zip);
+    url.searchParams.set("count", "1");
+    url.searchParams.set("language", "en");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("countryCode", "US");
+    const response = await fetch(url.toString());
+    if (!response.ok) return null;
+    const json = (await response.json()) as {
+      results?: Array<{
+        latitude?: number;
+        longitude?: number;
+        name?: string;
+        admin1?: string;
+      }>;
+    };
+    const first = json.results?.[0];
+    if (typeof first?.latitude !== "number" || typeof first?.longitude !== "number") return null;
+    const city = first.name?.trim();
+    const state = first.admin1?.trim();
+    const locationLabel = city && state ? `${city}, ${state}` : city ?? null;
+    return {
+      lat: first.latitude,
+      lon: first.longitude,
+      locationLabel,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getCoordsFromZip(
+  zip: string
+): Promise<{ lat: number; lon: number; locationLabel: string | null } | null> {
+  const primary = await getCoordsFromZippopotam(zip);
+  if (primary) return primary;
+  return getCoordsFromOpenMeteoGeocoding(zip);
 }
 
 function forecastFromOpenMeteo(payload: {
