@@ -425,7 +425,8 @@ export default function MealsView() {
 
   const weekDates = Array.from({ length: DAYS }, (_, i) => addDays(weekStart, i));
 
-  const popularMeals = useMemo((): MealRecipe[] => {
+  const popularMeals = useMemo(
+    (): { recipe: MealRecipe; usageCount: number }[] => {
     const useCountByRecipeId: Record<string, number> = {};
     recipes.forEach((r) => {
       useCountByRecipeId[r.id] = 0;
@@ -441,8 +442,14 @@ export default function MealsView() {
     return [...recipes]
       .filter((r) => (useCountByRecipeId[r.id] ?? 0) > 0)
       .sort((a, b) => (useCountByRecipeId[b.id] ?? 0) - (useCountByRecipeId[a.id] ?? 0))
+      .map((recipe) => ({
+        recipe,
+        usageCount: useCountByRecipeId[recipe.id] ?? 0,
+      }))
       .slice(0, 14);
-  }, [visibleMeals, recipes]);
+    },
+    [visibleMeals, recipes]
+  );
 
   return (
     <DndProvider
@@ -524,18 +531,28 @@ export default function MealsView() {
         reuse. Use the Meal prep tab to generate a list from your planned meals.
       </p>
 
-      <h3 className="text-base font-semibold text-skydark-text mt-6 mb-2">
-        Most popular meals
-      </h3>
-      <p className="text-sm text-skydark-text-secondary mb-2">
-        Drag a meal to a day slot above to add it to your plan.
-      </p>
-      <div className="pb-2">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {popularMeals.map((recipe) => (
+      <section className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+          <div>
+            <h3 className="text-base font-semibold text-skydark-text">
+              Most Popular Meals
+            </h3>
+            <p className="text-sm text-skydark-text-secondary mt-0.5">
+              Drag any card onto the weekly planner to add it instantly.
+            </p>
+          </div>
+          <span className="text-xs font-medium text-skydark-text-secondary rounded-full bg-gray-100 px-2.5 py-1">
+            Ranked by this week&apos;s usage
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+          {popularMeals.map(({ recipe, usageCount }, index) => (
             <DraggableMealCard
               key={recipe.id}
               recipe={recipe}
+              usageCount={usageCount}
+              rank={index + 1}
               onRecipeClick={() => setViewRecipe(recipe)}
             />
           ))}
@@ -545,7 +562,7 @@ export default function MealsView() {
             No popular meals yet. Add a few meals to start building favorites.
           </p>
         )}
-      </div>
+      </section>
 
       <MealModal
         open={modalOpen || !!viewRecipe}

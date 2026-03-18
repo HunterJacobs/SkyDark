@@ -14,10 +14,14 @@ export default function MobileNav({
 }: MobileNavProps) {
   const edgeBorderClass = position === "bottom" ? "border-t" : "border-b";
   const visibilityClass = forceVisible ? "flex" : "flex md:hidden";
+  const bottomPositionClass =
+    position === "bottom"
+      ? "fixed bottom-0 left-0 right-0 z-40 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-6px_16px_rgba(0,0,0,0.08)]"
+      : "";
 
   return (
     <nav
-      className={`${visibilityClass} items-center gap-1 px-2 py-2 overflow-x-auto ${edgeBorderClass} border-gray-200 bg-white shrink-0`}
+      className={`${visibilityClass} items-center gap-1 px-2 py-2 overflow-x-auto ${edgeBorderClass} border-gray-200 bg-white shrink-0 ${bottomPositionClass}`}
       aria-label="Main navigation"
     >
       {navItems.map(({ path, label, Icon }) => (
