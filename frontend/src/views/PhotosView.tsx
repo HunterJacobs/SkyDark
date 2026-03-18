@@ -3,6 +3,7 @@ import { usePhotosContext } from "../contexts/PhotosContext";
 import { useAppContext } from "../contexts/AppContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import CloseIcon from "../components/Common/CloseIcon";
+import MediaImage from "../components/Common/MediaImage";
 
 export default function PhotosView() {
   const { photos, addPhoto, deletePhoto } = usePhotosContext();
@@ -14,7 +15,7 @@ export default function PhotosView() {
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const maxSizeBytes = 1.5 * 1024 * 1024; // 1.5 MB per image so localStorage stays usable
+    const maxSizeBytes = 10 * 1024 * 1024; // 10 MB per image (stored in HA Media folder)
     files.forEach((file) => {
       if (file.size > maxSizeBytes) return;
       const reader = new FileReader();
@@ -90,7 +91,7 @@ export default function PhotosView() {
               onClick={() => setSelectedId(photo.id)}
               className="absolute inset-0 w-full h-full focus:ring-2 focus:ring-skydark-accent focus:ring-inset"
             >
-              <img
+              <MediaImage
                 src={photo.url}
                 alt={photo.caption || "Photo"}
                 className="w-full h-full object-cover hover:shadow-skydark-hover transition-shadow"
@@ -113,8 +114,8 @@ export default function PhotosView() {
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setSelectedId(null)}
         >
-          <img
-            src={photos.find((p) => p.id === selectedId)?.url}
+          <MediaImage
+            src={photos.find((p) => p.id === selectedId)?.url ?? ""}
             alt=""
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}

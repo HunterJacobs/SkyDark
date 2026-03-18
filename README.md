@@ -126,6 +126,12 @@ Full list and parameters: **Settings** → **Devices & Services** → **Skydark 
 
 ---
 
+## Photos & media
+
+Photos are stored in **Media > My Media > Calendar Images**. When you import photos in the app, they are saved to `config/media/Calendar Images/` and appear in the Home Assistant media browser. Ensure your `media_dirs` includes the config media folder (e.g. `local: /config/media` in `configuration.yaml` under `homeassistant`). The `upload_photo` service can register files already in that folder.
+
+---
+
 ## Troubleshooting
 
 - **White screen or 403 when opening the panel (or on refresh)**  

@@ -145,6 +145,24 @@ export async function deletePhotoWS(
   return send(conn, { type: "skydark_calendar/delete_photo", photo_id: photoId });
 }
 
+/** Resolve media-source URL to a displayable URL (for img src). */
+export async function resolveMediaUrl(
+  conn: Connection,
+  mediaContentId: string
+): Promise<string> {
+  if (!mediaContentId.startsWith("media-source://")) {
+    return mediaContentId;
+  }
+  const res = await send<{ url: string }>(conn, {
+    type: "media_source/resolve_media",
+    media_content_id: mediaContentId,
+  });
+  const url = res?.url;
+  if (!url) return mediaContentId;
+  // Resolved URL may be relative; ensure it works (HA uses same origin)
+  return url.startsWith("/") ? `${window.location.origin}${url}` : url;
+}
+
 export async function fetchConfig(conn: Connection): Promise<{
   panel_url?: string;
   config?: Record<string, unknown>;

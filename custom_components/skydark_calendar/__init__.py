@@ -14,6 +14,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import DB_NAME, DOMAIN, PANEL_ICON, PANEL_TITLE, PANEL_URL
+from . import photos as photos_module
 from .database import SkydarkDatabase
 from .websocket_api import async_register_websocket_handlers
 
@@ -157,6 +158,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         db_path = Path(hass.config.config_dir) / DOMAIN / DB_NAME
         await hass.async_add_executor_job(
             lambda: db_path.parent.mkdir(parents=True, exist_ok=True)
+        )
+        # Ensure Media > My Media > Calendar Images exists
+        await hass.async_add_executor_job(
+            photos_module.ensure_media_dir_exists,
+            Path(hass.config.config_dir),
         )
         db = SkydarkDatabase(db_path)
         await hass.async_add_executor_job(db.init)

@@ -821,6 +821,12 @@ class SkydarkDatabase:
             cur = conn.execute("SELECT * FROM photos ORDER BY created_at DESC")
             return [dict(row) for row in cur.fetchall()]
 
+    def get_photo(self, photo_id: str) -> dict | None:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def delete_photo(self, photo_id: str) -> None:
         with self._connection() as conn:
             conn.execute("DELETE FROM photos WHERE id = ?", (photo_id,))

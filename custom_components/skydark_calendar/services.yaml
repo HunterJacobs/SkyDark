@@ -417,11 +417,11 @@ delete_meal:
 
 upload_photo:
   name: Upload photo
-  description: Register a photo (file must already exist at file_path within config directory).
+  description: Register a photo (file must already exist). Use media/Calendar Images/filename for Media > My Media > Calendar Images.
   fields:
     file_path:
       name: File path
-      description: Path to the photo file (within Home Assistant config directory)
+      description: Path to the photo file within config (e.g. media/Calendar Images/photo.jpg)
       required: true
       selector:
         text:
