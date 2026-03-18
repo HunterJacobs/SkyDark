@@ -8,6 +8,7 @@ import re
 import shutil
 import uuid
 from pathlib import Path
+from typing import Iterable
 from urllib.parse import quote, unquote, urlparse
 
 from homeassistant.core import HomeAssistant
@@ -28,15 +29,32 @@ _MIME_TO_EXT = {
 
 
 def get_calendar_media_dir(hass: HomeAssistant) -> Path:
-    """Return the Home Assistant media folder for calendar photos."""
+    """Return preferred media folder for calendar photos.
+
+    Prefer the configured `local` media directory when available so the folder
+    appears in Media > My Media reliably across HA installations.
+    """
+    media_dirs = getattr(hass.config, "media_dirs", None) or {}
+    preferred_root = media_dirs.get("local")
+    if preferred_root:
+        return (Path(preferred_root) / CALENDAR_MEDIA_FOLDER).resolve()
     return Path(hass.config.path("media", CALENDAR_MEDIA_FOLDER)).resolve()
 
 
 def ensure_calendar_media_dir(hass: HomeAssistant) -> Path:
-    """Create and return the calendar media folder."""
-    media_dir = get_calendar_media_dir(hass)
-    media_dir.mkdir(parents=True, exist_ok=True)
-    return media_dir
+    """Create and return the calendar media folder.
+
+    Also ensure the folder exists in any configured media roots so it is
+    discoverable in HA's media browser regardless of media_dir setup.
+    """
+    preferred_dir = get_calendar_media_dir(hass)
+    preferred_dir.mkdir(parents=True, exist_ok=True)
+
+    for media_root in _iter_media_roots(hass):
+        candidate = (media_root / CALENDAR_MEDIA_FOLDER).resolve()
+        candidate.mkdir(parents=True, exist_ok=True)
+
+    return preferred_dir
 
 
 def save_data_url_to_media(
@@ -113,3 +131,19 @@ def _extension_for(mime_type: str | None, filename_hint: str | None) -> str:
     if mime_type:
         return _MIME_TO_EXT.get(mime_type, ".bin")
     return ".bin"
+
+
+def _iter_media_roots(hass: HomeAssistant) -> Iterable[Path]:
+    """Yield configured media roots plus /config/media fallback."""
+    yielded: set[Path] = set()
+    media_dirs = getattr(hass.config, "media_dirs", None) or {}
+    for root in media_dirs.values():
+        path = Path(root).resolve()
+        if path in yielded:
+            continue
+        yielded.add(path)
+        yield path
+
+    fallback = Path(hass.config.path("media")).resolve()
+    if fallback not in yielded:
+        yield fallback

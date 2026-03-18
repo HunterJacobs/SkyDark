@@ -555,12 +555,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         file_path_raw = call.data["file_path"]
 
-        config_dir = Path(hass.config.config_dir).resolve()
+        allowed_roots = _get_allowed_photo_source_roots(hass)
         try:
             resolved_path = Path(file_path_raw).resolve()
-            if not resolved_path.is_relative_to(config_dir):
+            if not any(resolved_path.is_relative_to(root) for root in allowed_roots):
                 _LOGGER.warning(
-                    "upload_photo: rejected file_path '%s' outside config directory",
+                    "upload_photo: rejected file_path '%s' outside allowed roots",
                     file_path_raw,
                 )
                 return
@@ -677,3 +677,13 @@ def _copy_photo_to_media_storage(hass: HomeAssistant, source_path: Path) -> str:
     """Copy a source image into /media/Calendar Images and return HA media URL."""
     ensure_calendar_media_dir(hass)
     return copy_file_to_media(hass, source_path, filename_hint=source_path.name)
+
+
+def _get_allowed_photo_source_roots(hass: HomeAssistant) -> list[Path]:
+    """Return trusted roots for upload_photo source files."""
+    roots = {Path(hass.config.config_dir).resolve()}
+    media_dirs = getattr(hass.config, "media_dirs", None) or {}
+    for root in media_dirs.values():
+        roots.add(Path(root).resolve())
+    roots.add(Path(hass.config.path("media")).resolve())
+    return list(roots)
