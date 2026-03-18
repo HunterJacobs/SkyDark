@@ -7,8 +7,8 @@ Skydark is a full-screen family organizer for Home Assistant that combines calen
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Custom%20Integration-41BDF5?logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![HACS](https://img.shields.io/badge/HACS-Custom%20Repository-41BDF5)](https://hacs.xyz/)
 
-![Skydark preview](<img width="1918" height="943" alt="Screenshot 2026-03-17 235039" src="https://github.com/user-attachments/assets/05febbce-640b-4c4e-9b80-eae8afbc4b89" />
-)
+<img width="1918" height="943" alt="Screenshot 2026-03-17 235039" src="https://github.com/user-attachments/assets/010d9f67-8ade-409e-8eaa-eae8d4548c05" />
+
 
 ## Why people install SkyDark
 
