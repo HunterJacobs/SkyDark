@@ -6,5 +6,13 @@
   "display": "standalone",
   "background_color": "#F8FAFB",
   "theme_color": "#3B9BBF",
-  "orientation": "landscape-primary"
+  "orientation": "landscape-primary",
+  "icons": [
+    {
+      "src": "/skydark/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
