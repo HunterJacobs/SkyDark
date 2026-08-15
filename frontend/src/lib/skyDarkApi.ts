@@ -16,7 +16,6 @@ export interface SkydarkEvent {
   all_day?: number;
   location?: string | null;
   calendar_id?: string | null;
-  calendar_ids?: string[] | string | null;
   color?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -34,6 +33,11 @@ export interface SkydarkTask {
   created_at?: string | null;
   due_date?: string | null;
   weekdays?: number[] | null;
+  custom_schedule?: string | null;
+  custom_monthday?: number | null;
+  custom_month?: number | null;
+  custom_weekday?: number | null;
+  custom_week_of_month?: number | null;
 }
 
 export interface SkydarkList {
@@ -59,21 +63,18 @@ export interface SkydarkMeal {
   id: string;
   name: string;
   recipe_url?: string | null;
-  ingredients?: string | null;
-  image_url?: string | null;
-  instructions?: string | null;
+  ingredients?: string | { name: string; quantity?: string; unit?: string }[] | null;
   meal_date: string;
   meal_type: string;
   created_at?: string | null;
   meal_recipe_id?: string | null;
 }
 
-export interface SkydarkPhoto {
+export interface SkydarkMealRecipe {
   id: string;
-  file_path: string;
-  caption?: string | null;
-  uploaded_by?: string | null;
+  name: string;
   created_at?: string | null;
+  ingredients?: { name: string; quantity?: string; unit?: string }[];
 }
 
 export interface SkydarkConfig {
@@ -125,66 +126,11 @@ export async function fetchFamilyMembers(conn: Connection): Promise<{
   return send(conn, { type: "skydark_calendar/get_family_members" });
 }
 
-export async function fetchPhotos(conn: Connection): Promise<{
-  photos: SkydarkPhoto[];
-}> {
-  return send(conn, { type: "skydark_calendar/get_photos" });
-}
-
-export async function addPhotoWS(
-  conn: Connection,
-  data: {
-    url: string;
-    caption?: string;
-    uploaded_by?: string;
-    filename?: string;
-  }
-): Promise<{ photo_id: string }> {
-  return send(conn, { type: "skydark_calendar/add_photo", ...data });
-}
-
-export async function deletePhotoWS(
-  conn: Connection,
-  photoId: string
-): Promise<{ success: boolean }> {
-  return send(conn, { type: "skydark_calendar/delete_photo", photo_id: photoId });
-}
-
-/** Resolve media-source URL to a displayable URL (for img src). */
-export async function resolveMediaUrl(
-  conn: Connection,
-  mediaContentId: string
-): Promise<string> {
-  if (!mediaContentId.startsWith("media-source://")) {
-    return mediaContentId;
-  }
-  const res = await send<{ url: string }>(conn, {
-    type: "media_source/resolve_media",
-    media_content_id: mediaContentId,
-  });
-  const url = res?.url;
-  if (!url) return mediaContentId;
-  return url.startsWith("/") ? `${window.location.origin}${url}` : url;
-}
-
 export async function fetchConfig(conn: Connection): Promise<{
   panel_url?: string;
   config?: Record<string, unknown>;
 }> {
   return send(conn, { type: "skydark_calendar/get_config" });
-}
-
-export async function fetchAppSettings(conn: Connection): Promise<{
-  settings?: Record<string, unknown>;
-}> {
-  return send(conn, { type: "skydark_calendar/get_app_settings" });
-}
-
-export async function saveAppSettings(
-  conn: Connection,
-  settings: Record<string, unknown>
-): Promise<{ success: boolean }> {
-  return send(conn, { type: "skydark_calendar/set_app_settings", settings });
 }
 
 export async function fetchPoints(conn: Connection): Promise<{ points_by_member: Record<string, number> }> {
@@ -203,33 +149,18 @@ export async function fetchRewards(conn: Connection): Promise<{ rewards: Skydark
   return send(conn, { type: "skydark_calendar/get_rewards" });
 }
 
-export interface SkydarkMealRecipe {
-  id: string;
-  name: string;
-  ingredients: { name: string; quantity?: string; unit?: string }[];
-  image_url?: string | null;
-  instructions?: string | null;
-}
-
 export async function fetchMealRecipes(conn: Connection): Promise<{ recipes: SkydarkMealRecipe[] }> {
   return send(conn, { type: "skydark_calendar/get_meal_recipes" });
 }
 
 /** Normalize backend event to frontend CalendarEvent shape */
 export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
-  const legacyCalendarId = e.calendar_id;
-  let multiCalendarIds: string[] = [];
-  if (Array.isArray(e.calendar_ids)) {
-    multiCalendarIds = e.calendar_ids.map((id) => String(id)).filter(Boolean);
-  } else if (typeof e.calendar_ids === "string" && e.calendar_ids.trim()) {
-    try {
-      const parsed = JSON.parse(e.calendar_ids);
-      if (Array.isArray(parsed)) {
-        multiCalendarIds = parsed.map((id) => String(id)).filter(Boolean);
-      }
-    } catch {
-      multiCalendarIds = [e.calendar_ids];
-    }
+  const calendar_id = e.calendar_id;
+  let ids: string[] | undefined;
+  if (Array.isArray(calendar_id)) {
+    ids = calendar_id.map(String);
+  } else if (typeof calendar_id === "string" && calendar_id) {
+    ids = calendar_id.split(",").map((s) => s.trim()).filter(Boolean);
   }
   return {
     id: e.id,
@@ -239,16 +170,18 @@ export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
     end_time: e.end_time ?? undefined,
     all_day: Boolean(e.all_day),
     location: e.location ?? undefined,
-    calendar_id:
-      multiCalendarIds.length > 0
-        ? multiCalendarIds
-        : legacyCalendarId
-          ? [String(legacyCalendarId)]
-          : undefined,
+    calendar_id: ids,
     recurrence_rule: undefined,
     external_id: undefined,
     external_source: undefined,
   };
+}
+
+function calendarIdParam(ids?: string[] | string | null): string | undefined {
+  if (!ids) return undefined;
+  if (Array.isArray(ids)) return ids[0];
+  const first = ids.split(",")[0]?.trim();
+  return first || undefined;
 }
 
 // --- HA service calls (skydark_calendar domain) ---
@@ -262,13 +195,49 @@ export async function serviceAddEvent(
     start_time: string;
     end_time?: string;
     all_day?: boolean;
-    calendar_id?: string;
-    calendar_ids?: string[];
+    calendar_id?: string | string[];
     description?: string;
     location?: string;
   }
 ): Promise<unknown> {
-  return callService(conn, DOMAIN, "add_event", data);
+  return callService(conn, DOMAIN, "add_event", {
+    ...data,
+    calendar_id: calendarIdParam(data.calendar_id),
+  });
+}
+
+export async function serviceUpdateEvent(
+  conn: Connection,
+  data: {
+    event_id: string;
+    title?: string;
+    start_time?: string;
+    end_time?: string;
+    all_day?: boolean;
+    calendar_id?: string | string[];
+    description?: string;
+    location?: string;
+  }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "update_event", {
+    ...data,
+    calendar_id: calendarIdParam(data.calendar_id),
+  });
+}
+
+export async function serviceDeleteEvent(conn: Connection, eventId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_event", { event_id: eventId });
+}
+
+export async function serviceCompleteTask(
+  conn: Connection,
+  data: { task_id: string; completed_date?: string; points?: number }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "complete_task", data);
+}
+
+export async function serviceUncompleteTask(conn: Connection, taskId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "uncomplete_task", { task_id: taskId });
 }
 
 export async function serviceAddTask(
@@ -281,6 +250,12 @@ export async function serviceAddTask(
     icon?: string;
     points?: number;
     due_date?: string;
+    weekdays?: number[];
+    custom_schedule?: string;
+    custom_monthday?: number;
+    custom_month?: number;
+    custom_weekday?: number;
+    custom_week_of_month?: number;
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "add_task", data);
@@ -297,23 +272,19 @@ export async function serviceUpdateTask(
     icon?: string;
     points?: number;
     due_date?: string;
+    weekdays?: number[];
+    custom_schedule?: string;
+    custom_monthday?: number;
+    custom_month?: number;
+    custom_weekday?: number;
+    custom_week_of_month?: number;
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "update_task", data);
 }
 
-export async function serviceCompleteTask(
-  conn: Connection,
-  data: { task_id: string; completed_date?: string; points?: number }
-): Promise<unknown> {
-  return callService(conn, DOMAIN, "complete_task", data);
-}
-
-export async function serviceAddReward(
-  conn: Connection,
-  data: { name: string; points_required: number; description?: string; icon?: string }
-): Promise<unknown> {
-  return callService(conn, DOMAIN, "add_reward", data);
+export async function serviceDeleteTask(conn: Connection, taskId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_task", { task_id: taskId });
 }
 
 export async function serviceAddPoints(
@@ -323,19 +294,22 @@ export async function serviceAddPoints(
   return callService(conn, DOMAIN, "add_points", data);
 }
 
-/** Delete a reward via WebSocket (same connection as get_rewards; more reliable than callService in panels). */
-export async function deleteReward(conn: Connection, rewardId: string): Promise<void> {
-  await send<{ success: boolean }>(conn, {
-    type: "skydark_calendar/delete_reward",
-    reward_id: rewardId,
-  });
-}
-
 export async function serviceRedeemReward(
   conn: Connection,
   data: { member_id: string; reward_id: string }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "redeem_reward", data);
+}
+
+export async function serviceAddReward(
+  conn: Connection,
+  data: { name: string; points_required: number; description?: string; icon?: string }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "add_reward", data);
+}
+
+export async function serviceDeleteReward(conn: Connection, rewardId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_reward", { reward_id: rewardId });
 }
 
 export async function serviceCreateList(
@@ -345,6 +319,10 @@ export async function serviceCreateList(
   return callService(conn, DOMAIN, "create_list", { ...data, list_type: data.list_type ?? "general" });
 }
 
+export async function serviceDeleteList(conn: Connection, listId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_list", { list_id: listId });
+}
+
 export async function serviceAddListItem(
   conn: Connection,
   data: { list_id: string; content: string }
@@ -352,45 +330,12 @@ export async function serviceAddListItem(
   return callService(conn, DOMAIN, "add_list_item", data);
 }
 
-export async function serviceAddMealRecipe(
-  conn: Connection,
-  data: {
-    name: string;
-    ingredients?: { name: string; quantity?: string; unit?: string }[];
-    image_url?: string;
-    instructions?: string;
-  }
-): Promise<unknown> {
-  return callService(conn, DOMAIN, "add_meal_recipe", {
-    name: data.name,
-    ingredients: data.ingredients ?? [],
-    image_url: data.image_url,
-    instructions: data.instructions,
-  });
+export async function serviceToggleListItem(conn: Connection, itemId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "toggle_list_item", { item_id: itemId });
 }
 
-/** Add a meal recipe via WebSocket and return the new recipe_id (for linking to a meal). */
-export async function fetchAddMealRecipe(
-  conn: Connection,
-  data: {
-    name: string;
-    ingredients?: { name: string; quantity?: string; unit?: string }[];
-    image_url?: string;
-    instructions?: string;
-  }
-): Promise<{ recipe_id: string }> {
-  const res = await send<{ recipe_id: string }>(conn, {
-    type: "skydark_calendar/add_meal_recipe",
-    name: data.name,
-    ingredients: (data.ingredients ?? []).map((i) => ({
-      name: i.name,
-      quantity: i.quantity ?? "",
-      unit: i.unit ?? "",
-    })),
-    image_url: data.image_url,
-    instructions: data.instructions,
-  });
-  return res;
+export async function serviceDeleteListItem(conn: Connection, itemId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_list_item", { item_id: itemId });
 }
 
 export async function serviceAddMeal(
@@ -398,50 +343,13 @@ export async function serviceAddMeal(
   data: {
     name: string;
     meal_date: string;
-    meal_type: string;
-    recipe_url?: string;
-    ingredients?: string;
-    image_url?: string;
-    instructions?: string;
+    meal_type?: string;
+    ingredients?: { name: string; quantity?: string; unit?: string }[];
     meal_recipe_id?: string;
+    recipe_url?: string;
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "add_meal", data);
-}
-
-export async function addFamilyMemberWS(
-  conn: Connection,
-  data: { name: string; color: string; initial?: string; avatar_url?: string }
-): Promise<{ family_member: FamilyMember & { avatar_url?: string | null; sort_order?: number | null } }> {
-  return send(conn, { type: "skydark_calendar/add_family_member", ...data });
-}
-
-export async function updateFamilyMemberWS(
-  conn: Connection,
-  data: {
-    member_id: string;
-    name?: string;
-    color?: string;
-    initial?: string;
-    avatar_url?: string;
-    sort_order?: number;
-  }
-): Promise<{ success: boolean }> {
-  return send(conn, { type: "skydark_calendar/update_family_member", ...data });
-}
-
-export async function deleteFamilyMemberWS(
-  conn: Connection,
-  memberId: string
-): Promise<{ success: boolean }> {
-  return send(conn, { type: "skydark_calendar/delete_family_member", member_id: memberId });
-}
-
-export async function serviceDeleteTask(
-  conn: Connection,
-  data: { task_id: string }
-): Promise<unknown> {
-  return callService(conn, DOMAIN, "delete_task", data);
 }
 
 export async function serviceUpdateMeal(
@@ -449,18 +357,48 @@ export async function serviceUpdateMeal(
   data: {
     meal_id: string;
     name?: string;
+    meal_date?: string;
+    meal_type?: string;
+    ingredients?: { name: string; quantity?: string; unit?: string }[];
     meal_recipe_id?: string;
-    ingredients?: string;
-    image_url?: string;
-    instructions?: string;
+    recipe_url?: string;
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "update_meal", data);
 }
 
-export async function serviceDeleteMeal(
+export async function serviceDeleteMeal(conn: Connection, mealId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_meal", { meal_id: mealId });
+}
+
+export async function serviceAddMealRecipe(
   conn: Connection,
-  data: { meal_id: string }
+  data: { name: string; ingredients?: { name: string; quantity?: string; unit?: string }[] }
 ): Promise<unknown> {
-  return callService(conn, DOMAIN, "delete_meal", data);
+  return callService(conn, DOMAIN, "add_meal_recipe", {
+    name: data.name,
+    ingredients: data.ingredients ?? [],
+  });
+}
+
+export async function serviceDeleteMealRecipe(conn: Connection, recipeId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_meal_recipe", { recipe_id: recipeId });
+}
+
+export async function serviceAddFamilyMember(
+  conn: Connection,
+  data: { name: string; color: string; initial?: string; avatar_url?: string }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "add_family_member", data);
+}
+
+export async function serviceUpdateFamilyMember(
+  conn: Connection,
+  data: { member_id: string; name?: string; color?: string; initial?: string; avatar_url?: string; sort_order?: number }
+): Promise<unknown> {
+  return callService(conn, DOMAIN, "update_family_member", data);
+}
+
+export async function serviceDeleteFamilyMember(conn: Connection, memberId: string): Promise<unknown> {
+  return callService(conn, DOMAIN, "delete_family_member", { member_id: memberId });
 }

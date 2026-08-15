@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DB_NAME, DOMAIN, PANEL_ICON, PANEL_TITLE, PANEL_URL
 from .database import SkydarkDatabase
-from .photo_media import ensure_calendar_media_dir
+from .services import SERVICES as _SERVICES
 from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,43 +30,6 @@ _NO_CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
 }
-
-
-class SkyDarkRootView(HomeAssistantView):
-    """Redirect /skydark and /skydark/ to /skydark/index.html.
-
-    Without this, GET /skydark is handled by the static path as a directory
-    request and returns 403 Forbidden, causing a white screen and broken
-    refresh when the panel URL is /skydark.
-    """
-
-    url = PANEL_URL
-    name = "skydark_root"
-    requires_auth = False
-
-    async def get(self, request):  # type: ignore[override]
-        from aiohttp import web
-
-        return web.Response(
-            status=302,
-            headers={"Location": f"{PANEL_URL}/index.html"},
-        )
-
-
-class SkyDarkRootSlashView(HomeAssistantView):
-    """Redirect /skydark/ to /skydark/index.html."""
-
-    url = f"{PANEL_URL}/"
-    name = "skydark_root_slash"
-    requires_auth = False
-
-    async def get(self, request):  # type: ignore[override]
-        from aiohttp import web
-
-        return web.Response(
-            status=302,
-            headers={"Location": f"{PANEL_URL}/index.html"},
-        )
 
 
 class SkyDarkIndexView(HomeAssistantView):
@@ -106,28 +69,6 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     return True
 
 
-# All Skydark services; unregistered on unload.
-_SERVICES = (
-    "add_event",
-    "add_task",
-    "update_task",
-    "complete_task",
-    "delete_task",
-    "add_points",
-    "add_reward",
-    "delete_reward",
-    "redeem_reward",
-    "add_list_item",
-    "create_list",
-    "add_meal_recipe",
-    "add_meal",
-    "update_meal",
-    "delete_meal",
-    "upload_photo",
-    "send_notification",
-)
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Skydark Calendar from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -136,13 +77,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         www_path = Path(__path__[0]) / "www"
         www_exists = await hass.async_add_executor_job(www_path.exists)
         if www_exists:
-            hass.http.register_view(SkyDarkRootView())
-            hass.http.register_view(SkyDarkRootSlashView())
             hass.http.register_view(SkyDarkIndexView(www_path))
             await hass.http.async_register_static_paths(
-                [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=False)]
+                [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=True)]
             )
-            _LOGGER.debug("Registered static path %s -> %s", PANEL_URL, www_path)
 
         async_remove_panel(hass, "skydark")
         async_register_built_in_panel(
@@ -161,7 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         db = SkydarkDatabase(db_path)
         await hass.async_add_executor_job(db.init)
-        await hass.async_add_executor_job(ensure_calendar_media_dir, hass)
         hass.data[DOMAIN]["db"] = db
         hass.data[DOMAIN]["panel_url"] = PANEL_URL
         hass.data[DOMAIN]["entry_id"] = entry.entry_id

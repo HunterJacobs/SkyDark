@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import {
+  LogoIcon,
   CalendarIcon,
   ListsIcon,
   CheckIcon,
@@ -8,7 +9,6 @@ import {
   PhotosIcon,
   SettingsIcon,
 } from "./SidebarIcons";
-import skydarkLogo from "../../assets/skydark-logo.png";
 
 function ShoppingIcon() {
   return (
@@ -18,7 +18,7 @@ function ShoppingIcon() {
   );
 }
 
-export const navItems = [
+const navItems = [
   { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
   { path: "/lists", label: "Lists", Icon: ListsIcon },
   { path: "/tasks", label: "Chores", Icon: CheckIcon },
@@ -29,35 +29,52 @@ export const navItems = [
   { path: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
+  const nav = (
+    <div className={`flex ${mobile ? "flex-row justify-around w-full" : "flex-col items-center gap-1 w-full"}`}>
+      {navItems.map(({ path, label, Icon }) => (
+        <NavLink
+          key={path}
+          to={path}
+          className={({ isActive }) =>
+            `flex items-center justify-center rounded-full transition-colors ${
+              mobile ? "w-11 h-11" : "w-12 h-12"
+            } ${
+              isActive
+                ? "bg-[rgba(59,155,191,0.1)] text-skydark-accent"
+                : "text-skydark-text-secondary hover:bg-gray-100"
+            }`
+          }
+          title={label}
+          aria-label={label}
+        >
+          <Icon />
+        </NavLink>
+      ))}
+    </div>
+  );
+
+  if (mobile) {
+    return (
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]"
+        aria-label="Mobile navigation"
+      >
+        {nav}
+      </nav>
+    );
+  }
+
   return (
     <aside
       className="hidden md:flex flex-col items-center py-4 flex-shrink-0 border-r border-gray-200 bg-white w-20"
       style={{ width: 80 }}
       aria-label="Main navigation"
     >
-      <div className="mb-4 flex items-center justify-center w-12 h-12" aria-hidden>
-        <img src={skydarkLogo} alt="" className="max-w-full max-h-full object-contain" />
+      <div className="mb-4 flex items-center justify-center text-skydark-accent" aria-hidden>
+        <LogoIcon className="w-8 h-8" />
       </div>
-      <nav className="flex flex-col items-center gap-1 w-full" aria-label="Main">
-        {navItems.map(({ path, label, Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) =>
-              `flex items-center justify-center w-12 h-12 rounded-full transition-colors ${
-                isActive
-                  ? "bg-[rgba(59,155,191,0.1)] text-skydark-accent"
-                  : "text-skydark-text-secondary hover:bg-gray-100"
-              }`
-            }
-            title={label}
-            aria-label={label}
-          >
-            <Icon />
-          </NavLink>
-        ))}
-      </nav>
+      {nav}
     </aside>
   );
 }

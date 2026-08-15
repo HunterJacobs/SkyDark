@@ -2,14 +2,8 @@ import {
   createContext,
   useContext,
   useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
   type ReactNode,
 } from "react";
-import { addPhotoWS, deletePhotoWS } from "../lib/skyDarkApi";
-import { useSkydarkDataContext } from "./SkydarkDataContext";
 
 export interface PhotoItem {
   id: string;
@@ -17,126 +11,28 @@ export interface PhotoItem {
   caption: string;
 }
 
-const STORAGE_KEY = "skydark_photos";
-
-const BASE = "/skydark/default-photos/";
-const DEFAULT_PHOTOS: PhotoItem[] = [
-  { id: "1", url: `${BASE}1.png`, caption: "Family" },
-  { id: "2", url: `${BASE}2.png`, caption: "Trip" },
-  { id: "3", url: `${BASE}3.png`, caption: "" },
-  { id: "4", url: `${BASE}4.png`, caption: "" },
-  { id: "5", url: `${BASE}5.png`, caption: "" },
-  { id: "6", url: `${BASE}6.png`, caption: "" },
-  { id: "7", url: `${BASE}7.png`, caption: "" },
-  { id: "8", url: `${BASE}8.png`, caption: "" },
+const INITIAL_PHOTOS: PhotoItem[] = [
+  { id: "1", url: "https://picsum.photos/1920/1080?random=1", caption: "Family" },
+  { id: "2", url: "https://picsum.photos/1920/1080?random=2", caption: "Trip" },
+  { id: "3", url: "https://picsum.photos/1920/1080?random=3", caption: "" },
+  { id: "4", url: "https://picsum.photos/1920/1080?random=4", caption: "" },
+  { id: "5", url: "https://picsum.photos/1920/1080?random=5", caption: "" },
+  { id: "6", url: "https://picsum.photos/1920/1080?random=6", caption: "" },
 ];
-
-function loadStoredPhotos(): PhotoItem[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PHOTOS;
-    const parsed = JSON.parse(raw) as PhotoItem[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_PHOTOS;
-    return parsed;
-  } catch {
-    return DEFAULT_PHOTOS;
-  }
-}
-
-function savePhotos(photos: PhotoItem[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(photos));
-  } catch {
-    // ignore quota or disabled localStorage
-  }
-}
 
 interface PhotosContextValue {
   photos: PhotoItem[];
-  addPhoto: (url: string, caption?: string, filename?: string) => Promise<void>;
-  deletePhoto: (id: string) => Promise<void>;
+  setPhotos: React.Dispatch<React.SetStateAction<PhotoItem[]>>;
 }
 
 const PhotosContext = createContext<PhotosContextValue | null>(null);
 
 export function PhotosProvider({ children }: { children: ReactNode }) {
-  const skydark = useSkydarkDataContext();
-  const conn = skydark?.data?.connection;
-  const [photos, setPhotos] = useState<PhotoItem[]>(loadStoredPhotos);
-  const migratedLocalPhotosRef = useRef(false);
-
-  useEffect(() => {
-    if (!conn) savePhotos(photos);
-  }, [photos, conn]);
-
-  const serverPhotos: PhotoItem[] = useMemo(() => {
-    if (!conn) return [];
-    return (skydark?.data?.photos ?? [])
-      .map((p) => ({
-        id: String(p.id),
-        url: String(p.file_path ?? ""),
-        caption: String(p.caption ?? ""),
-      }))
-      .filter((p) => p.url.length > 0);
-  }, [conn, skydark?.data?.photos]);
-
-  useEffect(() => {
-    if (!conn || migratedLocalPhotosRef.current) return;
-    migratedLocalPhotosRef.current = true;
-    const local = loadStoredPhotos();
-    const hasCustomLocal = local.some(
-      (p) => p.id.startsWith("upload-") || p.url.startsWith("data:")
-    );
-    if (!hasCustomLocal || serverPhotos.length > 0) return;
-    void Promise.all(
-      local.map((p) => addPhotoWS(conn, { url: p.url, caption: p.caption ?? "" }))
-    )
-      .then(() => skydark?.refetch())
-      .catch(() => {
-        // Ignore migration failures; user can retry import.
-      });
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-  }, [conn, serverPhotos.length, skydark]);
-
-  const addPhoto = useCallback(
-    async (url: string, caption: string = "", filename?: string) => {
-      if (conn) {
-        await addPhotoWS(conn, { url, caption, filename });
-        await skydark?.refetch();
-        return;
-      }
-      const id = `upload-${Date.now()}`;
-      setPhotos((prev) => [{ id, url, caption }, ...prev]);
-    },
-    [conn, skydark]
+  const [photos, setPhotos] = useState<PhotoItem[]>(INITIAL_PHOTOS);
+  const value: PhotosContextValue = { photos, setPhotos };
+  return (
+    <PhotosContext.Provider value={value}>{children}</PhotosContext.Provider>
   );
-
-  const deletePhoto = useCallback(
-    async (id: string) => {
-      if (conn) {
-        await deletePhotoWS(conn, id);
-        await skydark?.refetch();
-        return;
-      }
-      setPhotos((prev) => {
-        const item = prev.find((p) => p.id === id);
-        if (item && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
-        return prev.filter((p) => p.id !== id);
-      });
-    },
-    [conn, skydark]
-  );
-
-  const value: PhotosContextValue = {
-    photos: conn ? serverPhotos : photos,
-    addPhoto,
-    deletePhoto,
-  };
-  return <PhotosContext.Provider value={value}>{children}</PhotosContext.Provider>;
 }
 
 export function usePhotosContext(): PhotosContextValue {

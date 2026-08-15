@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek } from "date-fns";
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns";
 import MonthView from "../components/Calendar/MonthView";
 import WeekView, { type WeekViewRef } from "../components/Calendar/WeekView";
 import DayView, { type DayViewRef } from "../components/Calendar/DayView";
@@ -11,7 +11,8 @@ import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import FloatingActionButton from "../components/Common/FloatingActionButton";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceAddEvent } from "../lib/skyDarkApi";
+import { serviceAddEvent, serviceUpdateEvent, serviceDeleteEvent } from "../lib/skyDarkApi";
+import { eventRangeForDate } from "../lib/dates";
 import type { CalendarEvent } from "../types/calendar";
 
 const FALLBACK_EVENTS: CalendarEvent[] = [];
@@ -26,7 +27,6 @@ export default function CalendarView() {
   });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [defaultEventStartDate, setDefaultEventStartDate] = useState<Date | null>(null);
   const [tasksProgress, setTasksProgress] = useState(true);
   const [eventsSelectAll, setEventsSelectAll] = useState(true);
   const [memberVisibility, setMemberVisibility] = useState<Record<string, boolean>>({});
@@ -36,9 +36,20 @@ export default function CalendarView() {
   const dayViewRef = useRef<DayViewRef>(null);
 
   const serverEvents = skydark?.data?.connection ? (skydark.data.events ?? []) : FALLBACK_EVENTS;
-  const events = serverEvents
-    .filter((e) => !localOverrides.deleted.has(e.id))
-    .map((e) => localOverrides.events.find((o) => o.id === e.id) ?? e);
+  const events = [
+    ...serverEvents
+      .filter((e) => !localOverrides.deleted.has(e.id))
+      .map((e) => localOverrides.events.find((o) => o.id === e.id) ?? e),
+    ...localOverrides.events.filter(
+      (o) => !serverEvents.some((e) => e.id === o.id) && !localOverrides.deleted.has(o.id)
+    ),
+  ];
+
+  useEffect(() => {
+    if (!skydark?.refetchEvents) return;
+    const { start, end } = eventRangeForDate(currentDate, viewMode === "month" ? 1 : 0);
+    void skydark.refetchEvents(start, end);
+  }, [currentDate, viewMode, skydark?.refetchEvents]);
 
   // When switching to week or day view, scroll to current time after the component mounts
   useEffect(() => {
@@ -71,51 +82,46 @@ export default function CalendarView() {
   const doSaveEvent = async (data: Partial<CalendarEvent> & { id?: string }) => {
     const conn = skydark?.data?.connection;
     const isAdd = !data.id;
-    const hasRequired = data.title && data.start_time;
-    if (isAdd && hasRequired) {
-      const title = data.title as string;
-      const startTime = data.start_time as string;
-      if (conn) {
-        try {
+    if (conn && data.title && data.start_time) {
+      try {
+        if (isAdd) {
           await serviceAddEvent(conn, {
-            title,
-            start_time: startTime,
+            title: data.title,
+            start_time: data.start_time,
             end_time: data.end_time,
             all_day: data.all_day ?? false,
-            calendar_id: data.calendar_id?.[0],
-            calendar_ids: data.calendar_id,
+            calendar_id: data.calendar_id,
             description: data.description,
             location: data.location,
           });
-          await skydark?.refetchEvents();
-        } catch (err) {
-          console.error("[SkyDark] Failed to add event:", err);
-          // fallback: optimistic local add when service fails
-          const newEvent: CalendarEvent = {
-            id: String(Date.now()),
-            title,
-            start_time: startTime,
+        } else if (data.id) {
+          await serviceUpdateEvent(conn, {
+            event_id: data.id,
+            title: data.title,
+            start_time: data.start_time,
             end_time: data.end_time,
-            all_day: data.all_day,
+            all_day: data.all_day ?? false,
+            calendar_id: data.calendar_id,
             description: data.description,
             location: data.location,
-            calendar_id: data.calendar_id,
-          };
-          setLocalOverrides((prev) => ({ ...prev, events: [...prev.events, newEvent] }));
+          });
         }
-      } else {
-        // No connection: keep event visible locally so add isn't silently dropped
-        const newEvent: CalendarEvent = {
-          id: String(Date.now()),
-          title,
-          start_time: startTime,
-          end_time: data.end_time,
-          all_day: data.all_day,
-          description: data.description,
-          location: data.location,
-          calendar_id: data.calendar_id,
-        };
-        setLocalOverrides((prev) => ({ ...prev, events: [...prev.events, newEvent] }));
+        await skydark?.refetchEvents();
+        setLocalOverrides({ events: [], deleted: new Set() });
+      } catch {
+        if (isAdd) {
+          setLocalOverrides((prev) => ({
+            ...prev,
+            events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],
+          }));
+        } else if (data.id) {
+          setLocalOverrides((prev) => ({
+            ...prev,
+            events: prev.events.some((e) => e.id === data.id)
+              ? prev.events.map((e) => (e.id === data.id ? { ...e, ...data } : e))
+              : [...prev.events, { ...serverEvents.find((e) => e.id === data.id), ...data } as CalendarEvent],
+          }));
+        }
       }
     } else if (data.id) {
       setLocalOverrides((prev) => ({
@@ -124,13 +130,32 @@ export default function CalendarView() {
           ? prev.events.map((e) => (e.id === data.id ? { ...e, ...data } : e))
           : [...prev.events, { ...serverEvents.find((e) => e.id === data.id), ...data } as CalendarEvent],
       }));
+    } else {
+      setLocalOverrides((prev) => ({
+        ...prev,
+        events: [...prev.events, { ...data, id: String(Date.now()) } as CalendarEvent],
+      }));
     }
     setEventModalOpen(false);
     setSelectedEvent(null);
   };
 
   const handleEventMove = (eventId: string, newStart: Date, newEnd: Date) => {
-    runIfUnlocked("editDeleteEvents", () =>
+    runIfUnlocked("editDeleteEvents", async () => {
+      const conn = skydark?.data?.connection;
+      if (conn) {
+        try {
+          await serviceUpdateEvent(conn, {
+            event_id: eventId,
+            start_time: newStart.toISOString(),
+            end_time: newEnd.toISOString(),
+          });
+          await skydark?.refetchEvents();
+          return;
+        } catch {
+          // fall through to local override
+        }
+      }
       setLocalOverrides((prev) => ({
         ...prev,
         events: prev.events.some((e) => e.id === eventId)
@@ -147,26 +172,28 @@ export default function CalendarView() {
                 end_time: newEnd.toISOString(),
               },
             ],
-      }))
-    );
+      }));
+    });
   };
 
   const handleDeleteEvent = (eventId: string) => {
     runIfUnlocked("editDeleteEvents", () => doDeleteEvent(eventId));
   };
 
-  const doDeleteEvent = (eventId: string) => {
-    setLocalOverrides((prev) => ({ ...prev, deleted: new Set(prev.deleted).add(eventId) }));
+  const doDeleteEvent = async (eventId: string) => {
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      try {
+        await serviceDeleteEvent(conn, eventId);
+        await skydark?.refetchEvents();
+      } catch {
+        setLocalOverrides((prev) => ({ ...prev, deleted: new Set(prev.deleted).add(eventId) }));
+      }
+    } else {
+      setLocalOverrides((prev) => ({ ...prev, deleted: new Set(prev.deleted).add(eventId) }));
+    }
     setEventModalOpen(false);
     setSelectedEvent(null);
-  };
-
-  const openCreateEventModal = (date?: Date) => {
-    runIfUnlocked("addEvents", () => {
-      setSelectedEvent(null);
-      setDefaultEventStartDate(date ?? null);
-      setEventModalOpen(true);
-    });
   };
 
   const goPrev = () => {
@@ -200,13 +227,7 @@ export default function CalendarView() {
         <div className="flex items-center gap-2">
           <select
             value={viewMode}
-            onChange={(e) => {
-              const mode = e.target.value as "month" | "week" | "day";
-              setViewMode(mode);
-              const now = new Date();
-              if (mode === "week") setCurrentDate(startOfWeek(now));
-              else if (mode === "day") setCurrentDate(now);
-            }}
+            onChange={(e) => setViewMode(e.target.value as "month" | "week" | "day")}
             className="input-skydark"
           >
             <option value="month">Month</option>
@@ -254,12 +275,8 @@ export default function CalendarView() {
           currentDate={currentDate}
           events={filteredEvents}
           familyMembers={familyMembers}
-          onDateClick={(d) => {
-            setCurrentDate(d);
-            openCreateEventModal(d);
-          }}
+          onDateClick={(d) => setCurrentDate(d)}
           onEventClick={(e) => {
-            setDefaultEventStartDate(null);
             setSelectedEvent(e);
             setEventModalOpen(true);
           }}
@@ -271,12 +288,7 @@ export default function CalendarView() {
           currentDate={currentDate}
           events={filteredEvents}
           familyMembers={familyMembers}
-          onDateClick={(d) => {
-            setCurrentDate(d);
-            openCreateEventModal(d);
-          }}
           onEventClick={(e) => {
-            setDefaultEventStartDate(null);
             setSelectedEvent(e);
             setEventModalOpen(true);
           }}
@@ -289,12 +301,7 @@ export default function CalendarView() {
           currentDate={currentDate}
           events={filteredEvents}
           familyMembers={familyMembers}
-          onDateClick={(d) => {
-            setCurrentDate(d);
-            openCreateEventModal(d);
-          }}
           onEventClick={(e) => {
-            setDefaultEventStartDate(null);
             setSelectedEvent(e);
             setEventModalOpen(true);
           }}
@@ -306,10 +313,8 @@ export default function CalendarView() {
         onClose={() => {
           setEventModalOpen(false);
           setSelectedEvent(null);
-          setDefaultEventStartDate(null);
         }}
         event={selectedEvent}
-        defaultStartDate={defaultEventStartDate}
         familyMembers={familyMembers}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
@@ -321,7 +326,10 @@ export default function CalendarView() {
             label: "Add event",
             icon: <span className="text-xl leading-none">+</span>,
             onClick: () => {
-              openCreateEventModal();
+              runIfUnlocked("addEvents", () => {
+                setSelectedEvent(null);
+                setEventModalOpen(true);
+              });
             },
           },
         ]}

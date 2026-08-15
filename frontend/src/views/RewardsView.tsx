@@ -4,7 +4,7 @@ import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import RewardModal from "../components/Common/RewardModal";
 import FloatingActionButton from "../components/Common/FloatingActionButton";
-import { serviceRedeemReward, serviceAddReward, deleteReward } from "../lib/skyDarkApi";
+import { serviceRedeemReward, serviceAddReward, serviceDeleteReward } from "../lib/skyDarkApi";
 import type { Reward } from "../types/rewards";
 
 const STORAGE_REWARDS = "skydark_rewards";
@@ -116,10 +116,10 @@ export default function RewardsView() {
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
-        await deleteReward(conn, rewardId);
+        await serviceDeleteReward(conn, rewardId);
         await skydark?.refetch();
-      } catch (err) {
-        console.error("[SkyDark] Failed to delete reward:", err);
+      } catch {
+        return;
       }
     } else {
       setLocalRewards((prev) => prev.filter((r) => r.id !== rewardId));
@@ -158,13 +158,10 @@ export default function RewardsView() {
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
-        await serviceAddReward(conn, {
-          name: data.name,
-          points_required: data.points,
-        });
+        await serviceAddReward(conn, { name: data.name, points_required: data.points });
         await skydark?.refetch();
       } catch {
-        // leave as-is
+        return;
       }
     } else {
       setLocalRewards((prev) => [...prev, { ...data, id: `r${Date.now()}` }]);
@@ -173,7 +170,7 @@ export default function RewardsView() {
   };
 
   return (
-    <div className="min-h-full">
+    <div className="h-full">
       <h2 className="text-lg font-semibold text-skydark-text mb-4">Rewards</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -185,7 +182,7 @@ export default function RewardsView() {
                 className="flex items-center gap-3 p-3 rounded-card bg-white shadow-skydark"
               >
                 <div
-                  className="w-10 h-10 aspect-square rounded-full shrink-0 flex items-center justify-center text-white font-semibold"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
                   style={{ backgroundColor: m.color }}
                 >
                   {m.initial}

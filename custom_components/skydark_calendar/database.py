@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import uuid
-import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS events (
   all_day INTEGER DEFAULT 0,
   location TEXT,
   calendar_id TEXT,
-  calendar_ids TEXT,
   external_id TEXT,
   external_source TEXT,
   recurrence_rule TEXT,
@@ -100,8 +99,6 @@ CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items(list_id);
 CREATE TABLE IF NOT EXISTS meal_recipes (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  image_url TEXT,
-  instructions TEXT,
   created_at TEXT
 );
 
@@ -119,8 +116,6 @@ CREATE TABLE IF NOT EXISTS meals (
   name TEXT NOT NULL,
   recipe_url TEXT,
   ingredients TEXT,
-  image_url TEXT,
-  instructions TEXT,
   meal_date TEXT NOT NULL,
   meal_type TEXT NOT NULL,
   created_at TEXT,
@@ -162,11 +157,77 @@ CREATE TABLE IF NOT EXISTS points_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_points_log_member ON points_log(member_id);
+
+CREATE INDEX IF NOT EXISTS idx_meals_date ON meals(meal_date);
 """
 
 
 def _row_to_dict(cursor: sqlite3.Cursor, row: tuple) -> dict[str, Any]:
     return {cursor.description[i][0]: row[i] for i in range(len(row))}
+
+
+def _iso(value: datetime | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _encode_task_schedule(extra: dict[str, Any] | None) -> str | None:
+    if not extra:
+        return None
+    payload = {k: v for k, v in extra.items() if v is not None}
+    return json.dumps(payload) if payload else None
+
+
+def _decode_task_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Expand JSON stored in tasks.custom_schedule onto the row."""
+    raw = row.get("custom_schedule")
+    if not raw or not isinstance(raw, str) or not raw.startswith("{"):
+        return row
+    try:
+        extra = json.loads(raw)
+    except json.JSONDecodeError:
+        return row
+    if not isinstance(extra, dict):
+        return row
+    out = dict(row)
+    if "weekdays" in extra:
+        out["weekdays"] = extra["weekdays"]
+    for key in (
+        "custom_schedule",
+        "custom_monthday",
+        "custom_month",
+        "custom_weekday",
+        "custom_week_of_month",
+    ):
+        if key in extra:
+            out[key] = extra[key]
+    return out
+
+
+def _parse_ingredients(raw: Any) -> list[dict] | None:
+    if not raw:
+        return None
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return [{"name": raw, "quantity": "", "unit": ""}]
+    return None
+
+
+_DEFAULT_MEMBERS = (
+    ("Mom", "#FFD4D4", "M"),
+    ("Dad", "#C8E6F5", "D"),
+    ("Harper", "#C8F5E8", "H"),
+    ("Liam", "#FFF4D4", "L"),
+)
 
 
 class SkydarkDatabase:
@@ -216,47 +277,23 @@ class SkydarkDatabase:
                 conn.execute("ALTER TABLE lists ADD COLUMN list_type TEXT DEFAULT 'general'")
             if not self._column_exists(conn, "meals", "meal_recipe_id"):
                 conn.execute("ALTER TABLE meals ADD COLUMN meal_recipe_id TEXT")
-            if not self._column_exists(conn, "events", "calendar_ids"):
-                conn.execute("ALTER TABLE events ADD COLUMN calendar_ids TEXT")
-            if not self._column_exists(conn, "meals", "image_url"):
-                conn.execute("ALTER TABLE meals ADD COLUMN image_url TEXT")
-            if not self._column_exists(conn, "meals", "instructions"):
-                conn.execute("ALTER TABLE meals ADD COLUMN instructions TEXT")
-            if not self._column_exists(conn, "meal_recipes", "image_url"):
-                conn.execute("ALTER TABLE meal_recipes ADD COLUMN image_url TEXT")
-            if not self._column_exists(conn, "meal_recipes", "instructions"):
-                conn.execute("ALTER TABLE meal_recipes ADD COLUMN instructions TEXT")
-            self._seed_default_family_members(conn)
+            self._seed_if_empty(conn)
 
         with self._connection() as conn:
             _init(conn)
 
-    def _seed_default_family_members(self, conn: sqlite3.Connection) -> None:
-        """Seed initial members when DB has none.
-
-        The frontend ships with default IDs ("1".."4") for first-run UX.
-        Seeding matching IDs avoids foreign-key failures when events/tasks are
-        created before the user customizes profiles.
-        """
+    def _seed_if_empty(self, conn: sqlite3.Connection) -> None:
         cur = conn.execute("SELECT COUNT(*) FROM family_members")
-        count = int(cur.fetchone()[0] or 0)
-        if count > 0:
+        if (cur.fetchone()[0] or 0) > 0:
             return
-
         now = datetime.now(timezone.utc).isoformat()
-        defaults = [
-            ("1", "Mom", "#FFD4D4", "M", 1),
-            ("2", "Dad", "#C8E6F5", "D", 2),
-            ("3", "Harper", "#C8F5E8", "H", 3),
-            ("4", "Liam", "#FFF4D4", "L", 4),
-        ]
-        conn.executemany(
-            """
-            INSERT INTO family_members
-            (id, name, color, avatar_url, initial, sort_order, created_at)
-            VALUES (?, ?, ?, NULL, ?, ?, ?)
-            """,
-            [(id_, name, color, initial, sort_order, now) for id_, name, color, initial, sort_order in defaults],
+        for i, (name, color, initial) in enumerate(_DEFAULT_MEMBERS, start=1):
+            conn.execute(
+                "INSERT INTO family_members (id, name, color, initial, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), name, color, initial, i, now),
+            )
+        conn.execute(
+            "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('family_name', 'My Family')"
         )
 
     # Family members
@@ -322,20 +359,33 @@ class SkydarkDatabase:
             )
 
     def delete_family_member(self, id_: str) -> None:
+        """Remove a member and detach related rows so FKs cannot block the delete."""
         with self._connection() as conn:
+            conn.execute("UPDATE events SET calendar_id = NULL WHERE calendar_id = ?", (id_,))
+            conn.execute("DELETE FROM tasks WHERE assignee_id = ?", (id_,))
+            conn.execute("UPDATE lists SET owner_id = NULL WHERE owner_id = ?", (id_,))
+            conn.execute("UPDATE photos SET uploaded_by = NULL WHERE uploaded_by = ?", (id_,))
             conn.execute("DELETE FROM family_members WHERE id = ?", (id_,))
 
     # Events
     def get_events(
         self,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
     ) -> list[dict]:
+        """Return events overlapping [start, end]. Includes events that started before the range."""
         with self._connection() as conn:
-            if start and end:
+            start_iso = _iso(start)
+            end_iso = _iso(end)
+            if start_iso and end_iso:
                 cur = conn.execute(
-                    "SELECT * FROM events WHERE start_time >= ? AND start_time <= ? ORDER BY start_time",
-                    (start.isoformat(), end.isoformat()),
+                    """
+                    SELECT * FROM events
+                    WHERE start_time <= ?
+                      AND COALESCE(end_time, start_time) >= ?
+                    ORDER BY start_time
+                    """,
+                    (end_iso, start_iso),
                 )
             else:
                 cur = conn.execute("SELECT * FROM events ORDER BY start_time")
@@ -348,7 +398,6 @@ class SkydarkDatabase:
         end_time: datetime | None = None,
         all_day: bool = False,
         calendar_id: str | None = None,
-        calendar_ids: list[str] | None = None,
         description: str | None = None,
         location: str | None = None,
         color: str | None = None,
@@ -359,26 +408,9 @@ class SkydarkDatabase:
         id_ = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
-            # Support multi-assignment while keeping legacy calendar_id for FK/index.
-            provided_ids = calendar_ids or ([calendar_id] if calendar_id else [])
-            deduped_ids: list[str] = []
-            for mid in provided_ids:
-                if mid and mid not in deduped_ids:
-                    deduped_ids.append(mid)
-            safe_calendar_ids: list[str] = []
-            for mid in deduped_ids:
-                cur = conn.execute(
-                    "SELECT 1 FROM family_members WHERE id = ? LIMIT 1",
-                    (mid,),
-                )
-                if cur.fetchone() is not None:
-                    safe_calendar_ids.append(mid)
-                else:
-                    _LOGGER.warning("add_event: unknown calendar_id '%s' ignored", mid)
-            safe_calendar_id = safe_calendar_ids[0] if safe_calendar_ids else None
             conn.execute(
-                """INSERT INTO events (id, title, description, start_time, end_time, all_day, location, calendar_id, calendar_ids, external_id, external_source, recurrence_rule, color, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO events (id, title, description, start_time, end_time, all_day, location, calendar_id, external_id, external_source, recurrence_rule, color, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     id_,
                     title,
@@ -387,8 +419,7 @@ class SkydarkDatabase:
                     end_time.isoformat() if end_time else None,
                     1 if all_day else 0,
                     location or "",
-                    safe_calendar_id,
-                    json.dumps(safe_calendar_ids) if safe_calendar_ids else None,
+                    calendar_id,
                     external_id,
                     external_source,
                     recurrence_rule,
@@ -400,7 +431,7 @@ class SkydarkDatabase:
         return id_
 
     def update_event(self, id_: str, **kwargs: Any) -> None:
-        allowed = {"title", "description", "start_time", "end_time", "all_day", "location", "calendar_id", "calendar_ids", "color", "recurrence_rule"}
+        allowed = {"title", "description", "start_time", "end_time", "all_day", "location", "calendar_id", "color", "recurrence_rule"}
         updates = []
         values = []
         for k, v in kwargs.items():
@@ -410,8 +441,6 @@ class SkydarkDatabase:
                 v = v.isoformat()
             if k == "all_day":
                 v = 1 if v else 0
-            if k == "calendar_ids" and isinstance(v, list):
-                v = json.dumps(v)
             updates.append(f"{k} = ?")
             values.append(v)
         if not updates:
@@ -453,7 +482,7 @@ class SkydarkDatabase:
                 q += " AND completed_date IS NULL"
             q += " ORDER BY created_at"
             cur = conn.execute(q, params)
-            return [dict(row) for row in cur.fetchall()]
+            return [_decode_task_row(dict(row)) for row in cur.fetchall()]
 
     def add_task(
         self,
@@ -464,13 +493,19 @@ class SkydarkDatabase:
         icon: str | None = None,
         points: int = 0,
         due_date: str | None = None,
+        custom_schedule: dict[str, Any] | str | None = None,
     ) -> str:
         id_ = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        schedule = (
+            custom_schedule
+            if isinstance(custom_schedule, str)
+            else _encode_task_schedule(custom_schedule)
+        )
         with self._connection() as conn:
             conn.execute(
-                "INSERT INTO tasks (id, title, assignee_id, category, frequency, icon, points, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (id_, title, assignee_id, category, frequency, icon, points, due_date, now),
+                "INSERT INTO tasks (id, title, assignee_id, category, frequency, icon, points, due_date, custom_schedule, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (id_, title, assignee_id, category, frequency, icon, points, due_date, schedule, now),
             )
         return id_
 
@@ -484,6 +519,7 @@ class SkydarkDatabase:
         icon: str | None = None,
         points: int | None = None,
         due_date: str | None = None,
+        custom_schedule: dict[str, Any] | str | None = None,
     ) -> None:
         updates = []
         values: list[Any] = []
@@ -508,6 +544,13 @@ class SkydarkDatabase:
         if due_date is not None:
             updates.append("due_date = ?")
             values.append(due_date)
+        if custom_schedule is not None:
+            updates.append("custom_schedule = ?")
+            values.append(
+                custom_schedule
+                if isinstance(custom_schedule, str)
+                else _encode_task_schedule(custom_schedule)
+            )
         if not updates:
             return
         values.append(task_id)
@@ -521,7 +564,7 @@ class SkydarkDatabase:
         with self._connection() as conn:
             cur = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
             row = cur.fetchone()
-            return dict(row) if row else None
+            return _decode_task_row(dict(row)) if row else None
 
     def complete_task(self, task_id: str, completed_date: datetime | None = None) -> None:
         d = (completed_date or datetime.now(timezone.utc)).date().isoformat()
@@ -537,14 +580,23 @@ class SkydarkDatabase:
         completed_date: datetime | None = None,
         points: int = 0,
     ) -> None:
-        """Mark task complete and award points to assignee in one transaction."""
+        """Mark task complete and award points to assignee in one transaction.
+
+        Completing the same task again on the same calendar day is a no-op so
+        points are not awarded twice. Completing on a new day overwrites the
+        date and awards points again (daily/weekly chores).
+        """
         d = (completed_date or datetime.now(timezone.utc)).date().isoformat()
         with self._connection() as conn:
-            cur = conn.execute("SELECT assignee_id FROM tasks WHERE id = ?", (task_id,))
+            cur = conn.execute(
+                "SELECT assignee_id, completed_date FROM tasks WHERE id = ?", (task_id,)
+            )
             row = cur.fetchone()
             if not row:
                 return
             assignee_id = row[0]
+            if row[1] == d:
+                return
             conn.execute(
                 "UPDATE tasks SET completed_date = ? WHERE id = ?",
                 (d, task_id),
@@ -558,11 +610,30 @@ class SkydarkDatabase:
                 )
 
     def uncomplete_task(self, task_id: str) -> None:
+        self.uncomplete_task_and_revoke_points(task_id)
+
+    def uncomplete_task_and_revoke_points(self, task_id: str) -> None:
+        """Clear completion and remove today's 'Task completed' points for this task."""
         with self._connection() as conn:
+            cur = conn.execute("SELECT completed_date FROM tasks WHERE id = ?", (task_id,))
+            row = cur.fetchone()
+            if not row:
+                return
+            completed = row[0]
             conn.execute(
                 "UPDATE tasks SET completed_date = NULL WHERE id = ?",
                 (task_id,),
             )
+            if completed:
+                conn.execute(
+                    """
+                    DELETE FROM points_log
+                    WHERE task_id = ?
+                      AND reason = 'Task completed'
+                      AND date(created_at) = date(?)
+                    """,
+                    (task_id, completed),
+                )
 
     def delete_task(self, task_id: str) -> None:
         with self._connection() as conn:
@@ -656,7 +727,14 @@ class SkydarkDatabase:
                 )
             else:
                 cur = conn.execute("SELECT * FROM meals ORDER BY meal_date")
-            return [dict(row) for row in cur.fetchall()]
+            meals = []
+            for row in cur.fetchall():
+                item = dict(row)
+                parsed = _parse_ingredients(item.get("ingredients"))
+                if parsed is not None:
+                    item["ingredients"] = parsed
+                meals.append(item)
+            return meals
 
     def add_meal(
         self,
@@ -664,28 +742,16 @@ class SkydarkDatabase:
         meal_date: str,
         meal_type: str = "dinner",
         recipe_url: str | None = None,
-        ingredients: str | None = None,
-        image_url: str | None = None,
-        instructions: str | None = None,
+        ingredients: str | list | None = None,
         meal_recipe_id: str | None = None,
     ) -> str:
         id_ = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        ing = ingredients if isinstance(ingredients, str) or ingredients is None else json.dumps(ingredients)
         with self._connection() as conn:
             conn.execute(
-                "INSERT INTO meals (id, name, recipe_url, ingredients, image_url, instructions, meal_date, meal_type, created_at, meal_recipe_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    id_,
-                    name,
-                    recipe_url,
-                    ingredients,
-                    image_url,
-                    instructions,
-                    meal_date,
-                    meal_type,
-                    now,
-                    meal_recipe_id,
-                ),
+                "INSERT INTO meals (id, name, recipe_url, ingredients, meal_date, meal_type, created_at, meal_recipe_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (id_, name, recipe_url, ing, meal_date, meal_type, now, meal_recipe_id),
             )
         return id_
 
@@ -694,9 +760,10 @@ class SkydarkDatabase:
         meal_id: str,
         name: str | None = None,
         meal_recipe_id: str | None = None,
-        ingredients: str | None = None,
-        image_url: str | None = None,
-        instructions: str | None = None,
+        meal_date: str | None = None,
+        meal_type: str | None = None,
+        ingredients: str | list | None = None,
+        recipe_url: str | None = None,
     ) -> None:
         updates = []
         values: list[Any] = []
@@ -706,15 +773,20 @@ class SkydarkDatabase:
         if meal_recipe_id is not None:
             updates.append("meal_recipe_id = ?")
             values.append(meal_recipe_id)
+        if meal_date is not None:
+            updates.append("meal_date = ?")
+            values.append(meal_date)
+        if meal_type is not None:
+            updates.append("meal_type = ?")
+            values.append(meal_type)
         if ingredients is not None:
             updates.append("ingredients = ?")
-            values.append(ingredients)
-        if image_url is not None:
-            updates.append("image_url = ?")
-            values.append(image_url)
-        if instructions is not None:
-            updates.append("instructions = ?")
-            values.append(instructions)
+            values.append(
+                ingredients if isinstance(ingredients, str) else json.dumps(ingredients)
+            )
+        if recipe_url is not None:
+            updates.append("recipe_url = ?")
+            values.append(recipe_url)
         if not updates:
             return
         values.append(meal_id)
@@ -734,19 +806,13 @@ class SkydarkDatabase:
             cur = conn.execute("SELECT * FROM meal_recipes ORDER BY name")
             return [dict(row) for row in cur.fetchall()]
 
-    def add_meal_recipe(
-        self,
-        name: str,
-        ingredients: list[dict] | None = None,
-        image_url: str | None = None,
-        instructions: str | None = None,
-    ) -> str:
+    def add_meal_recipe(self, name: str, ingredients: list[dict] | None = None) -> str:
         id_ = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             conn.execute(
-                "INSERT INTO meal_recipes (id, name, image_url, instructions, created_at) VALUES (?, ?, ?, ?, ?)",
-                (id_, name, image_url, instructions, now),
+                "INSERT INTO meal_recipes (id, name, created_at) VALUES (?, ?, ?)",
+                (id_, name, now),
             )
             if ingredients:
                 for ing in ingredients:
@@ -770,6 +836,27 @@ class SkydarkDatabase:
                 (recipe_id,),
             )
             return [dict(row) for row in cur.fetchall()]
+
+    def get_meal_recipes_with_ingredients(self) -> list[dict]:
+        """Return recipes with an ingredients list attached (single extra query)."""
+        recipes = self.get_meal_recipes()
+        if not recipes:
+            return recipes
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM meal_ingredients ORDER BY name")
+            by_recipe: dict[str, list[dict]] = {}
+            for row in cur.fetchall():
+                item = dict(row)
+                by_recipe.setdefault(item["recipe_id"], []).append(item)
+        for recipe in recipes:
+            recipe["ingredients"] = by_recipe.get(recipe["id"], [])
+        return recipes
+
+    def delete_meal_recipe(self, recipe_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM meal_ingredients WHERE recipe_id = ?", (recipe_id,))
+            conn.execute("UPDATE meals SET meal_recipe_id = NULL WHERE meal_recipe_id = ?", (recipe_id,))
+            conn.execute("DELETE FROM meal_recipes WHERE id = ?", (recipe_id,))
 
     def get_shopping_list(self, start_date: str, end_date: str) -> list[dict]:
         """Aggregate ingredients from meals in date range; each row has name, quantity, unit, meal_date, meal_name."""
@@ -821,12 +908,6 @@ class SkydarkDatabase:
             cur = conn.execute("SELECT * FROM photos ORDER BY created_at DESC")
             return [dict(row) for row in cur.fetchall()]
 
-    def get_photo(self, photo_id: str) -> dict | None:
-        with self._connection() as conn:
-            cur = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,))
-            row = cur.fetchone()
-            return dict(row) if row else None
-
     def delete_photo(self, photo_id: str) -> None:
         with self._connection() as conn:
             conn.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
@@ -839,6 +920,18 @@ class SkydarkDatabase:
                 (member_id,),
             )
             return cur.fetchone()[0] or 0
+
+    def get_points_by_member(self) -> dict[str, int]:
+        """Return points balance for every family member in two queries."""
+        with self._connection() as conn:
+            members = conn.execute("SELECT id FROM family_members").fetchall()
+            totals = {
+                row[0]: int(row[1] or 0)
+                for row in conn.execute(
+                    "SELECT member_id, COALESCE(SUM(points), 0) FROM points_log GROUP BY member_id"
+                )
+            }
+            return {m[0]: totals.get(m[0], 0) for m in members}
 
     def add_points(self, member_id: str, points: int, reason: str, task_id: str | None = None) -> str:
         id_ = str(uuid.uuid4())
@@ -864,15 +957,15 @@ class SkydarkDatabase:
             )
         return id_
 
+    def delete_reward(self, reward_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM rewards WHERE id = ?", (reward_id,))
+
     def get_reward(self, reward_id: str) -> dict | None:
         with self._connection() as conn:
             cur = conn.execute("SELECT * FROM rewards WHERE id = ?", (reward_id,))
             row = cur.fetchone()
             return dict(row) if row else None
-
-    def delete_reward(self, reward_id: str) -> None:
-        with self._connection() as conn:
-            conn.execute("DELETE FROM rewards WHERE id = ?", (reward_id,))
 
     def redeem_reward(self, member_id: str, reward_id: str) -> bool:
         """Deduct points for reward atomically; returns True if member had enough points."""

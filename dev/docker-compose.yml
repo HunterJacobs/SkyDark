@@ -1,0 +1,17 @@
+# Run Home Assistant locally with SkyDark custom component for full-app development.
+# From repo root: ./scripts/run-local.sh  (builds frontend, then starts this)
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: skydark-ha-local
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    environment:
+      - TZ=UTC
+    volumes:
+      # Persistent HA config (storage, integrations, DB)
+      - ./config:/config
+      # Mount SkyDark custom component (includes built www/)
+      - ../custom_components/skydark_calendar:/config/custom_components/skydark_calendar

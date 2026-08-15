@@ -7,21 +7,33 @@ import PinPrompt from "../components/Common/PinPrompt";
 import { useAppContext } from "../contexts/AppContext";
 import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceCompleteTask, serviceAddTask, serviceUpdateTask, serviceDeleteTask } from "../lib/skyDarkApi";
+import { serviceCompleteTask, serviceUncompleteTask, serviceAddTask, serviceUpdateTask, serviceDeleteTask } from "../lib/skyDarkApi";
+import { scheduleFromTask, isCompletedToday, todayStr } from "../lib/taskSchedule";
 import type { Task } from "../types/tasks";
 import { isDueToday, isLateInLastWeek, formatWeekdays, formatCustomSchedule } from "../types/tasks";
 
 type ChoresTabId = "byPerson" | "allChores";
 type ViewFilterId = "all" | "daily" | "weekly" | "custom";
 
-const MOCK_TASKS: Task[] = [
-  { id: "t1", title: "Load dishwasher", assignee_id: "1", frequency: "daily", category: "chores", points: 5 },
-  { id: "t2", title: "Litter Box", assignee_id: "1", frequency: "daily", points: 3 },
-  { id: "t3", title: "Put away laundry", assignee_id: "2", frequency: "daily", points: 10, completed_date: new Date().toISOString().slice(0, 10) },
-];
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const today = todayStr;
 
-function skydarkTasksToTasks(rows: { id: string; title: string; assignee_id: string; category?: string | null; frequency?: string | null; icon?: string | null; points?: number; completed_date?: string | null; due_date?: string | null; weekdays?: number[] | null }[]): Task[] {
+function skydarkTasksToTasks(rows: {
+  id: string;
+  title: string;
+  assignee_id: string;
+  category?: string | null;
+  frequency?: string | null;
+  icon?: string | null;
+  points?: number;
+  completed_date?: string | null;
+  due_date?: string | null;
+  weekdays?: number[] | null;
+  custom_schedule?: string | null;
+  custom_monthday?: number | null;
+  custom_month?: number | null;
+  custom_weekday?: number | null;
+  custom_week_of_month?: number | null;
+}[]): Task[] {
   return rows.map((t) => ({
     id: t.id,
     title: t.title,
@@ -33,6 +45,11 @@ function skydarkTasksToTasks(rows: { id: string; title: string; assignee_id: str
     completed_date: t.completed_date ?? null,
     due_date: t.due_date ?? null,
     weekdays: t.weekdays ?? undefined,
+    custom_schedule: (t.custom_schedule as Task["custom_schedule"]) ?? undefined,
+    custom_monthday: t.custom_monthday ?? undefined,
+    custom_month: t.custom_month ?? undefined,
+    custom_weekday: t.custom_weekday ?? undefined,
+    custom_week_of_month: t.custom_week_of_month ?? undefined,
   }));
 }
 
@@ -41,7 +58,7 @@ export default function TasksView() {
   const { familyMembers } = useAppContext();
   const { runIfUnlocked, pinPromptProps } = usePinGate();
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [localTasks, setLocalTasks] = useState<Task[]>(MOCK_TASKS);
+  const [localTasks, setLocalTasks] = useState<Task[]>([]);
   const [activeTab, setActiveTab] = useState<ChoresTabId>("byPerson");
   const [viewFilter, setViewFilter] = useState<ViewFilterId>("all");
   const [showWeeklyChores, setShowWeeklyChores] = useState(false);
@@ -84,23 +101,27 @@ export default function TasksView() {
     runIfUnlocked("completeChores", async () => {
       const conn = skydark?.data?.connection;
       const task = tasks.find((t) => t.id === taskId);
-      const today = todayStr();
-      const isCompleting = !task?.completed_date;
+      const todayDate = today();
+      const isCompleting = !isCompletedToday(task?.completed_date, todayDate);
       if (conn && task) {
         try {
-          await serviceCompleteTask(conn, {
-            task_id: taskId,
-            completed_date: isCompleting ? today : undefined,
-            points: isCompleting ? (task.points ?? 0) : 0,
-          });
+          if (isCompleting) {
+            await serviceCompleteTask(conn, {
+              task_id: taskId,
+              completed_date: todayDate,
+              points: task.points ?? 0,
+            });
+          } else {
+            await serviceUncompleteTask(conn, taskId);
+          }
           await skydark?.refetch();
-        } catch (err) {
-          console.error("[SkyDark] Failed to complete task:", err);
+        } catch {
+          // leave UI as-is
         }
       } else {
         setLocalTasks((prev) =>
           prev.map((t) =>
-            t.id === taskId ? { ...t, completed_date: t.completed_date ? null : today } : t
+            t.id === taskId ? { ...t, completed_date: t.completed_date === todayDate ? null : todayDate } : t
           )
         );
       }
@@ -123,10 +144,10 @@ export default function TasksView() {
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
-        await serviceDeleteTask(conn, { task_id: taskId });
+        await serviceDeleteTask(conn, taskId);
         await skydark?.refetch();
-      } catch (err) {
-        console.error("[SkyDark] Failed to delete task:", err);
+      } catch {
+        return;
       }
     } else {
       setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -140,10 +161,11 @@ export default function TasksView() {
   };
 
   const handleSaveTask = async (data: Partial<Task> & { id?: string }) => {
-    const conn = skydark?.data?.connection;
     const points = typeof data.points === "number" ? data.points : 0;
+    const conn = skydark?.data?.connection;
     if (conn && data.title && data.assignee_id) {
       try {
+        const schedule = scheduleFromTask(data);
         if (data.id) {
           await serviceUpdateTask(conn, {
             task_id: data.id,
@@ -154,40 +176,40 @@ export default function TasksView() {
             icon: data.icon,
             points,
             due_date: data.due_date ?? undefined,
+            ...schedule,
           });
         } else {
           await serviceAddTask(conn, {
             title: data.title,
             assignee_id: data.assignee_id,
             category: data.category,
-            frequency: data.frequency ?? "daily",
+            frequency: data.frequency,
             icon: data.icon,
             points,
             due_date: data.due_date ?? undefined,
+            ...schedule,
           });
         }
         await skydark?.refetch();
-      } catch (err) {
-        console.error("[SkyDark] Failed to save task:", err);
+      } catch {
+        return;
       }
-    } else if (!conn) {
-      if (data.id) {
-        setLocalTasks((prev) =>
-          prev.map((t) => (t.id === data.id ? { ...t, ...data, points } : t))
-        );
-      } else {
-        setLocalTasks((prev) => [
-          ...prev,
-          { ...data, id: `t${Date.now()}`, completed_date: null, points } as Task,
-        ]);
-      }
+    } else if (data.id) {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === data.id ? { ...t, ...data, points } : t))
+      );
+    } else {
+      setLocalTasks((prev) => [
+        ...prev,
+        { ...data, id: `t${Date.now()}`, completed_date: null, points } as Task,
+      ]);
     }
     setTaskModalOpen(false);
     setEditingTask(null);
   };
 
   return (
-    <div className="min-h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="text-lg font-semibold text-skydark-text">Chores</h2>
         <div className="flex items-center gap-4">
@@ -244,10 +266,15 @@ export default function TasksView() {
       </div>
 
       {activeTab === "byPerson" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {familyMembers.map((member) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 flex-1 min-h-0 overflow-y-auto">
+          {familyMembers.length === 0 ? (
+            <div className="col-span-full rounded-card bg-white shadow-skydark p-8 text-center text-skydark-text-secondary">
+              Add family members in Settings to assign chores.
+            </div>
+          ) : (
+            familyMembers.map((member) => {
             const memberTasks = visibleTasks.filter((t) => t.assignee_id === member.id);
-            const completedCount = memberTasks.filter((t) => t.completed_date).length;
+            const completedCount = memberTasks.filter((t) => isCompletedToday(t.completed_date)).length;
             return (
               <PersonColumn
                 key={member.id}
@@ -260,12 +287,13 @@ export default function TasksView() {
                 hideCompleted={hideCompleted}
               />
             );
-          })}
+          })
+          )}
         </div>
       )}
 
       {activeTab === "allChores" && (
-        <div className="overflow-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full border-collapse bg-white rounded-card shadow-skydark overflow-hidden min-w-[700px]">
             <thead>
               <tr className="bg-skydark-bg border-b border-gray-200">
@@ -289,7 +317,7 @@ export default function TasksView() {
                 filteredTasksForTable.map((task) => {
                   const member = familyMembers.find((m) => m.id === task.assignee_id);
                   const dueToday = isDueToday(task);
-                  const completedToday = task.completed_date === todayStr();
+                  const completedToday = isCompletedToday(task.completed_date);
                   return (
                     <tr
                       key={task.id}
@@ -302,7 +330,7 @@ export default function TasksView() {
                         {member ? (
                           <span className="inline-flex items-center gap-2">
                             <span
-                              className="w-8 h-8 aspect-square rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold"
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
                               style={{ backgroundColor: member.color }}
                             >
                               {member.initial || member.name[0]}

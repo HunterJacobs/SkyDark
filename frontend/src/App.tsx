@@ -5,6 +5,7 @@ import SimulatedViewport from "./components/dev/SimulatedViewport";
 import ViewportIndicator from "./components/dev/ViewportIndicator";
 import ErrorBoundary from "./components/Common/ErrorBoundary";
 import { useViewportSimulator } from "./contexts/ViewportSimulatorContext";
+import { useSkydarkDataContext } from "./contexts/SkydarkDataContext";
 
 function ViewErrorFallback() {
   return (
@@ -52,8 +53,56 @@ function PageLoader() {
   );
 }
 
+/** Full-screen loading so the app never shows a blank white screen (e.g. in HA while connecting). */
+function ConnectionLoadingScreen() {
+  return (
+    <div
+      className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFB] text-[#2B3A4A]"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+    >
+      <div className="animate-pulse text-skydark-accent text-xl font-medium">Loading SkyDark…</div>
+      <div className="mt-2 text-sm text-gray-500">Connecting to Home Assistant</div>
+    </div>
+  );
+}
+
+/** Full-screen error when HA connection fails (e.g. auth or network). */
+function ConnectionErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFB] text-[#2B3A4A] p-8 text-center"
+      style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+    >
+      <div className="text-6xl mb-4" aria-hidden>⚠️</div>
+      <h2 className="text-xl font-semibold mb-2">Could not connect</h2>
+      <p className="text-sm text-gray-600 max-w-md mb-6">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="px-5 py-2.5 rounded-xl bg-[#3B9BBF] text-white font-medium hover:opacity-90"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const { developerMode } = useViewportSimulator();
+  const skydark = useSkydarkDataContext();
+
+  // Avoid white screen: show loading or connection error before main UI
+  if (skydark?.data.loading && !skydark?.data.connection) {
+    return <ConnectionLoadingScreen />;
+  }
+  if (skydark?.data.error) {
+    return (
+      <ConnectionErrorScreen
+        message={skydark.data.error}
+        onRetry={() => void skydark.refetch()}
+      />
+    );
+  }
 
   const content = (
     <MainLayout>

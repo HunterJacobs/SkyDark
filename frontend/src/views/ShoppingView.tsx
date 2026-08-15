@@ -8,6 +8,7 @@ import type { MealSlot } from "../types/meals";
 import type { ShoppingListItem } from "../types/shopping";
 
 const STORAGE_MEALS = "skydark_meals";
+const STORAGE_SHOPPING_CHECKED = "skydark_shopping_checked";
 
 type TabId = "meals" | "ingredients";
 
@@ -33,53 +34,50 @@ function loadMeals(): MealSlot[] {
   return [];
 }
 
-function parseMealIngredients(
-  raw: string | { name: string; quantity?: string; unit?: string }[] | null | undefined
-): { name: string; quantity: string; unit: string }[] | undefined {
-  if (!raw) return undefined;
-  if (Array.isArray(raw)) {
-    if (raw.length === 0) return undefined;
-    return raw.map((i) => ({
-      name: i.name ?? "",
-      quantity: (i.quantity as string) ?? "",
-      unit: (i.unit as string) ?? "",
-    }));
-  }
+function loadChecked(): Record<string, boolean> {
   try {
-    const parsed = JSON.parse(raw as string);
-    if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
-    return parsed.map((i: { name?: string; quantity?: string; unit?: string }) => ({
-      name: i.name ?? "",
-      quantity: (i.quantity as string) ?? "",
-      unit: (i.unit as string) ?? "",
-    }));
+    const raw = localStorage.getItem(STORAGE_SHOPPING_CHECKED);
+    if (raw) return JSON.parse(raw);
   } catch {
-    return undefined;
+    // ignore
   }
+  return {};
 }
 
-function skydarkMealsToSlots(rows: {
-  id: string;
-  name: string;
-  meal_date: string;
-  meal_type: string;
-  meal_recipe_id?: string | null;
-  ingredients?: string | { name: string; quantity?: string; unit?: string }[] | null;
-}[]): MealSlot[] {
+function parseIngredients(raw: unknown): MealSlot["ingredients"] {
+  if (!raw) return undefined;
+  if (Array.isArray(raw)) {
+    return raw.map((i: { name?: string; quantity?: string; unit?: string }) => ({
+      name: i.name ?? "",
+      quantity: i.quantity ?? "",
+      unit: i.unit ?? "",
+    }));
+  }
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parseIngredients(parsed);
+    } catch {
+      return [{ name: raw, quantity: "", unit: "" }];
+    }
+  }
+  return undefined;
+}
+
+function skydarkMealsToSlots(rows: { id: string; name: string; meal_date: string; meal_type: string; ingredients?: unknown }[]): MealSlot[] {
   return rows.map((m) => ({
     id: m.id,
     date: m.meal_date,
     mealType: m.meal_type,
     name: m.name,
-    recipeId: m.meal_recipe_id ?? undefined,
-    ingredients: parseMealIngredients(m.ingredients),
+    ingredients: parseIngredients(m.ingredients),
   }));
 }
 
 export default function ShoppingView() {
   const location = useLocation();
   const skydark = useSkydarkDataContext();
-  const { isFeatureLocked, verifyPin, settings, setSettings } = useAppContext();
+  const { isFeatureLocked, verifyPin } = useAppContext();
   const [localMeals, setLocalMeals] = useState<MealSlot[]>(loadMeals());
 
   const serverMeals = useMemo(() => {
@@ -109,7 +107,7 @@ export default function ShoppingView() {
   const [endDate, setEndDate] = useState(() =>
     format(addDays(new Date(), 7), "yyyy-MM-dd")
   );
-  const checked = settings.shoppingChecked ?? {};
+  const [checked, setChecked] = useState<Record<string, boolean>>(loadChecked);
   const [activeTab, setActiveTab] = useState<TabId>("meals");
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const [expandedIngredientKey, setExpandedIngredientKey] = useState<string | null>(null);
@@ -117,6 +115,10 @@ export default function ShoppingView() {
   useEffect(() => {
     if (location.pathname === "/shopping" && !skydark?.data?.connection) setLocalMeals(loadMeals());
   }, [location.pathname]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_SHOPPING_CHECKED, JSON.stringify(checked));
+  }, [checked]);
 
   const mealsInRange = useMemo((): MealSlot[] => {
     return meals
@@ -173,19 +175,11 @@ export default function ShoppingView() {
   }, [mealsInRange]);
 
   const toggleItem = (id: string) => {
-    const applyToggle = () => {
-      setSettings({
-        shoppingChecked: {
-          ...checked,
-          [id]: !checked[id],
-        },
-      });
-    };
     if (isFeatureLocked("mealprep")) {
-      runAfterPin(applyToggle);
+      runAfterPin(() => setChecked((prev) => ({ ...prev, [id]: !prev[id] })));
       return;
     }
-    applyToggle();
+    setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const toggleExpanded = (mealId: string) => {

@@ -6,18 +6,14 @@ import Modal from "../Common/Modal";
 import Toggle from "../Common/Toggle";
 import AddProfileModal from "../Settings/AddProfileModal";
 import { useAppContext } from "../../contexts/AppContext";
+import { toDatetimeLocalValue, localDateTimeToISO } from "../../lib/dates";
 
 type EventModalMode = "view" | "edit" | "create";
-
-function toLocalDateTimeInput(date: Date) {
-  return format(date, "yyyy-MM-dd'T'HH:mm");
-}
 
 interface EventModalProps {
   open: boolean;
   onClose: () => void;
   event?: CalendarEvent | null;
-  defaultStartDate?: Date | null;
   familyMembers: FamilyMember[];
   onSave: (data: Partial<CalendarEvent> & { id?: string }) => void;
   onDelete?: (eventId: string) => void;
@@ -27,7 +23,6 @@ export default function EventModal({
   open,
   onClose,
   event,
-  defaultStartDate,
   familyMembers,
   onSave,
   onDelete,
@@ -59,23 +54,18 @@ export default function EventModal({
           ? [event.calendar_id]
           : [];
       setTitle(event.title);
-      setStartTime(event.start_time.slice(0, 16));
-      setEndTime(event.end_time ? event.end_time.slice(0, 16) : "");
+      setStartTime(toDatetimeLocalValue(event.start_time));
+      setEndTime(toDatetimeLocalValue(event.end_time));
       setAllDay(!!event.all_day);
       setSelectedProfileIds(ids);
       setDescription(event.description || "");
       setLocation(event.location || "");
     } else {
       const now = new Date();
-      const start = defaultStartDate ? new Date(defaultStartDate) : new Date(now);
-      if (defaultStartDate) {
-        // Keep the clicked day but use current time for quick event creation.
-        start.setHours(now.getHours(), now.getMinutes(), 0, 0);
-      }
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const end = new Date(now.getTime() + 60 * 60 * 1000);
       setTitle("");
-      setStartTime(toLocalDateTimeInput(start));
-      setEndTime(toLocalDateTimeInput(end));
+      setStartTime(now.toISOString().slice(0, 16));
+      setEndTime(end.toISOString().slice(0, 16));
       setAllDay(false);
       setSelectedProfileIds(familyMembers.map((m) => m.id));
       setDescription("");
@@ -84,15 +74,15 @@ export default function EventModal({
       setCountdown(false);
       setReminder(false);
     }
-  }, [event, open, familyMembers, defaultStartDate]);
+  }, [event, open, familyMembers]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
       ...(event?.id && { id: event.id }),
       title,
-      start_time: new Date(startTime).toISOString(),
-      end_time: endTime ? new Date(endTime).toISOString() : undefined,
+      start_time: localDateTimeToISO(startTime),
+      end_time: endTime ? localDateTimeToISO(endTime) : undefined,
       all_day: allDay,
       calendar_id: selectedProfileIds.length > 0 ? selectedProfileIds : undefined,
       description: description || undefined,

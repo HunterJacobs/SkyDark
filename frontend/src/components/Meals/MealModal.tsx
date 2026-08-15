@@ -56,9 +56,6 @@ export default function MealModal({
 }: MealModalProps) {
   const isEdit = !!editSlot;
   const isViewRecipe = !!viewRecipe && !editSlot && !slotForModal;
-  const recipeForEdit = editSlot?.recipeId
-    ? recipes.find((r) => r.id === editSlot.recipeId)
-    : undefined;
   const [viewMode, setViewMode] = useState(true);
   const [viewRecipeViewMode, setViewRecipeViewMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,19 +80,13 @@ export default function MealModal({
       setShowAddForm(false);
       if (editSlot) {
         setName(editSlot.name);
-        const slotIngredients =
-          editSlot.ingredients?.length ?
-            editSlot.ingredients
-          : editSlot.recipeId
-            ? recipes.find((r) => r.id === editSlot.recipeId)?.ingredients
-            : undefined;
         setIngredients(
-          slotIngredients?.length
-            ? slotIngredients.map((i) => ({ ...i }))
+          editSlot.ingredients?.length
+            ? editSlot.ingredients.map((i) => ({ ...i }))
             : [{ ...emptyIngredient }]
         );
-        setInstructions(editSlot.instructions ?? recipeForEdit?.instructions ?? "");
-        setImageUrl(editSlot.imageUrl ?? recipeForEdit?.imageUrl);
+        setInstructions(editSlot.instructions ?? "");
+        setImageUrl(editSlot.imageUrl);
         setSaveToLibrary(false);
         setUpdateLibrary(!!editSlot.recipeId);
       } else if (viewRecipe) {
@@ -116,7 +107,7 @@ export default function MealModal({
         setUpdateLibrary(false);
       }
     }
-  }, [open, editSlot, viewRecipe, recipes, recipeForEdit]);
+  }, [open, editSlot, viewRecipe]);
 
   const addIngredient = () => {
     setIngredients((prev) => [...prev, { ...emptyIngredient }]);
@@ -270,10 +261,10 @@ export default function MealModal({
 
         {showView && editSlot && (
           <div className="flex flex-col h-full min-h-0">
-            {(editSlot.imageUrl || recipeForEdit?.imageUrl) && (
+            {editSlot.imageUrl && (
               <div className="mb-3 shrink-0">
                 <img
-                  src={editSlot.imageUrl ?? recipeForEdit?.imageUrl}
+                  src={editSlot.imageUrl}
                   alt=""
                   className="w-full h-32 object-cover rounded-xl"
                 />
@@ -301,13 +292,13 @@ export default function MealModal({
                   )}
                 </ul>
               </div>
-              {(editSlot.instructions ?? recipeForEdit?.instructions)?.trim() && (
+              {editSlot.instructions?.trim() && (
                 <div className="mb-3">
                   <p className="text-xs font-medium text-skydark-text-secondary uppercase tracking-wide mb-1.5">
                     Instructions
                   </p>
                   <p className="text-sm text-skydark-text whitespace-pre-wrap">
-                    {editSlot.instructions ?? recipeForEdit?.instructions}
+                    {editSlot.instructions}
                   </p>
                 </div>
               )}

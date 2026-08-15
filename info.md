@@ -1,18 +1,16 @@
 # Skydark Family Calendar
 
-Skydark turns Home Assistant into a family command center.
+A family organization panel for Home Assistant with calendar, chores, lists, meals, photos, rewards, and sleep routines.
 
-It combines calendar, chores, lists, meal planning, rewards, and photos into one clean touch-first panel for daily home organization.
+## Features
 
-## Highlights
-
-- Calendar views with drag-and-drop events
-- Chores and routines by person, with points and status
-- Grocery and custom lists with fast check-off flow
-- Weekly meal planning plus ingredient prep lists
-- Rewards tracking for family motivation
-- Local HA integration with SQLite-backed data and automation-friendly services
+- **Calendar** — Month/week/day views, drag-and-drop events, family member colors
+- **Chores & tasks** — Per-person columns, daily/weekly/custom frequency
+- **Lists** — Grocery, to-do, and custom lists with checkboxes
+- **Meals** — Weekly meal planning grid
+- **Photos, rewards, sleep** — Family photos, points/rewards, bedtime checklists
+- **Home Assistant** — Custom panel, SQLite storage, services, sensors, automations
 
 ## Documentation
 
-Full install, setup, and usage details: [github.com/HunterJacobs/SkyDark](https://github.com/HunterJacobs/SkyDark)
+See the [repository README](https://github.com/HunterJacobs/SkyDark) for full installation (HACS or manual), configuration, services, and development.

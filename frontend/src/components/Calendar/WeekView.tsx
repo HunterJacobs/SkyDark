@@ -55,7 +55,6 @@ interface WeekViewProps {
   currentDate: Date;
   events: CalendarEvent[];
   familyMembers: FamilyMember[];
-  onDateClick?: (date: Date) => void;
   onEventClick?: (event: CalendarEvent) => void;
   onEventMove?: (eventId: string, newStart: Date, newEnd: Date) => void;
 }
@@ -65,7 +64,7 @@ export interface WeekViewRef {
 }
 
 const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
-  { currentDate, events, familyMembers, onDateClick, onEventClick, onEventMove },
+  { currentDate, events, familyMembers, onEventClick, onEventMove },
   ref
 ) {
   const weekStart = startOfWeek(currentDate);
@@ -184,14 +183,8 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
                 key={d.toISOString()}
                 className="bg-skydark-bg flex flex-col items-center justify-center"
               >
-                <button
-                  type="button"
-                  onClick={() => onDateClick?.(d)}
-                  className="w-full h-full flex flex-col items-center justify-center hover:bg-gray-50"
-                >
-                  <span className="text-sm font-semibold text-skydark-text">{format(d, "EEE")}</span>
-                  <span className="text-xs text-skydark-text-secondary">{format(d, "d")}</span>
-                </button>
+                <span className="text-sm font-semibold text-skydark-text">{format(d, "EEE")}</span>
+                <span className="text-xs text-skydark-text-secondary">{format(d, "d")}</span>
               </div>
             ))}
           </div>
@@ -215,7 +208,6 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
                 <div
                   key={d.toISOString()}
                   className="bg-skydark-bg px-1 py-1 flex flex-col gap-0.5"
-                  onClick={() => onDateClick?.(d)}
                 >
                   {visibleEvents.map((event) => {
                     const { style: colorStyle, borderColor } = getEventColorStyle(
@@ -226,10 +218,7 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
                       <button
                         key={event.id}
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEventClick?.(event);
-                        }}
+                        onClick={() => onEventClick?.(event)}
                         className="text-left text-[10px] leading-tight px-1.5 py-0.5 rounded font-medium truncate w-full min-h-0 min-w-0 justify-start"
                         style={{
                           ...colorStyle,
@@ -286,7 +275,6 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
                         key={d.toISOString()}
                         className="bg-skydark-bg relative"
                         style={{ minHeight: fullDayHeight }}
-                        onClick={() => onDateClick?.(d)}
                       >
                         {format(d, "yyyy-MM-dd") === currentDayKey && (
                           <div

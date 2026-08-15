@@ -44,7 +44,7 @@ export default function ListCard({
 
   return (
     <div
-      className="w-full rounded-card overflow-hidden shadow-skydark flex flex-col min-h-[320px]"
+      className="rounded-card overflow-hidden shadow-skydark flex flex-col min-w-[280px] max-w-sm"
       style={{ backgroundColor: `${color}30` }}
     >
       <div className="p-4 flex items-center justify-between gap-2">

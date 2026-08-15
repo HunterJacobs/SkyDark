@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import type { Task } from "../../types/tasks";
 import { formatWeekdays, formatCustomSchedule } from "../../types/tasks";
+import { isCompletedToday } from "../../lib/taskSchedule";
 
 function formatDueStatus(dueDate: string): { text: string; isLate: boolean } {
   const due = new Date(dueDate);
@@ -34,7 +35,7 @@ interface TaskItemProps {
 }
 
 export default function TaskItem({ task, color, onToggle, onEdit, onDelete }: TaskItemProps) {
-  const completed = !!task.completed_date;
+  const completed = isCompletedToday(task.completed_date);
   const dueStatus = task.due_date ? formatDueStatus(task.due_date) : null;
 
   return (

@@ -85,8 +85,8 @@ export function isDueToday(task: Task): boolean {
 /** Returns true if the task was due in the last 7 days and is not completed (late). */
 export function isLateInLastWeek(task: Task): boolean {
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  if (task.completed_date === todayStr) return false;
+  const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (task.completed_date === todayDate) return false;
   if (task.frequency === "daily") return false;
   if (task.frequency === "weekly" && task.weekdays?.length) {
     for (let offset = 1; offset <= 7; offset++) {
@@ -107,7 +107,7 @@ export function isLateInLastWeek(task: Task): boolean {
       const dueStr = due.toISOString().slice(0, 10);
       const past = new Date(now);
       past.setDate(past.getDate() - 7);
-      if (dueStr >= past.toISOString().slice(0, 10) && dueStr < todayStr) return true;
+      if (dueStr >= past.toISOString().slice(0, 10) && dueStr < todayDate) return true;
     }
     return false;
   }

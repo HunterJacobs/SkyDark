@@ -30,104 +30,12 @@ add_event:
       description: Assign to family member calendar
       selector:
         text:
-    calendar_ids:
-      name: Calendar / family member IDs
-      description: Assign to multiple family member calendars
-      selector:
-        object:
     description:
       name: Description
       selector:
         text:
     location:
       name: Location
-      selector:
-        text:
-
-add_task:
-  name: Add task
-  description: Add a new chore/task.
-  fields:
-    title:
-      name: Title
-      description: Task title
-      required: true
-      selector:
-        text:
-    assignee_id:
-      name: Assignee ID
-      description: Family member ID to assign the task to
-      required: true
-      selector:
-        text:
-    category:
-      name: Category
-      description: Optional category (e.g. chores)
-      selector:
-        text:
-    frequency:
-      name: Frequency
-      description: daily, weekly, or custom
-      default: daily
-      selector:
-        text:
-    icon:
-      name: Icon
-      description: Optional icon name
-      selector:
-        text:
-    points:
-      name: Points
-      description: Points for completing the task
-      default: 0
-      selector:
-        number:
-          min: 0
-          step: 1
-    due_date:
-      name: Due date
-      description: Optional due date (YYYY-MM-DD)
-      selector:
-        text:
-
-update_task:
-  name: Update task
-  description: Update an existing task.
-  fields:
-    task_id:
-      name: Task ID
-      description: ID of the task to update
-      required: true
-      selector:
-        text:
-    title:
-      name: Title
-      selector:
-        text:
-    assignee_id:
-      name: Assignee ID
-      selector:
-        text:
-    category:
-      name: Category
-      selector:
-        text:
-    frequency:
-      name: Frequency
-      selector:
-        text:
-    icon:
-      name: Icon
-      selector:
-        text:
-    points:
-      name: Points
-      selector:
-        number:
-          min: 0
-          step: 1
-    due_date:
-      name: Due date
       selector:
         text:
 
@@ -181,44 +89,6 @@ add_points:
     task_id:
       name: Task ID
       description: Optional linked task ID
-      selector:
-        text:
-
-add_reward:
-  name: Add reward
-  description: Add a new reward definition (name and points required).
-  fields:
-    name:
-      name: Name
-      description: Reward name (e.g. Ice cream trip)
-      required: true
-      selector:
-        text:
-    points_required:
-      name: Points required
-      description: Cost in points to redeem
-      required: true
-      selector:
-        number:
-          min: 0
-          step: 1
-    description:
-      name: Description
-      selector:
-        text:
-    icon:
-      name: Icon
-      selector:
-        text:
-
-delete_reward:
-  name: Delete reward
-  description: Delete a reward definition.
-  fields:
-    reward_id:
-      name: Reward ID
-      description: ID of the reward to delete
-      required: true
       selector:
         text:
 
@@ -298,130 +168,14 @@ add_meal_recipe:
       description: List of ingredients (each with name, quantity, unit)
       selector:
         object:
-    image_url:
-      name: Image URL
-      description: Optional meal image URL or data URL
-      selector:
-        text:
-    instructions:
-      name: Instructions
-      description: Optional cooking instructions/notes
-      selector:
-        text:
-
-add_meal:
-  name: Add meal
-  description: Add a meal to a specific date and meal slot (breakfast, lunch, dinner, snacks).
-  fields:
-    name:
-      name: Meal name
-      description: Name of the meal
-      required: true
-      selector:
-        text:
-    meal_date:
-      name: Meal date
-      description: Date for the meal (YYYY-MM-DD)
-      required: true
-      selector:
-        text:
-    meal_type:
-      name: Meal type
-      description: Type of meal (Breakfast, Lunch, Dinner, Snacks)
-      required: true
-      selector:
-        text:
-    recipe_url:
-      name: Recipe URL
-      description: Optional URL to the recipe
-      selector:
-        text:
-    ingredients:
-      name: Ingredients
-      description: Optional ingredients (as text)
-      selector:
-        text:
-    image_url:
-      name: Image URL
-      description: Optional meal image URL or data URL
-      selector:
-        text:
-    instructions:
-      name: Instructions
-      description: Optional cooking instructions/notes
-      selector:
-        text:
-    meal_recipe_id:
-      name: Recipe ID
-      description: Optional ID of a saved recipe from the library
-      selector:
-        text:
-
-delete_task:
-  name: Delete task
-  description: Delete a chore/task.
-  fields:
-    task_id:
-      name: Task ID
-      description: ID of the task to delete
-      required: true
-      selector:
-        text:
-
-update_meal:
-  name: Update meal
-  description: Update an existing meal.
-  fields:
-    meal_id:
-      name: Meal ID
-      description: ID of the meal to update
-      required: true
-      selector:
-        text:
-    name:
-      name: Meal name
-      description: New name for the meal
-      selector:
-        text:
-    meal_recipe_id:
-      name: Recipe ID
-      description: Link to a recipe from the library
-      selector:
-        text:
-    ingredients:
-      name: Ingredients
-      description: Optional ingredients as JSON string (for meals not linked to a recipe)
-      selector:
-        text:
-    image_url:
-      name: Image URL
-      description: Optional meal image URL or data URL
-      selector:
-        text:
-    instructions:
-      name: Instructions
-      description: Optional cooking instructions/notes
-      selector:
-        text:
-
-delete_meal:
-  name: Delete meal
-  description: Delete a meal from the calendar.
-  fields:
-    meal_id:
-      name: Meal ID
-      description: ID of the meal to delete
-      required: true
-      selector:
-        text:
 
 upload_photo:
   name: Upload photo
-  description: Copy a photo into Media > My Media > Calendar Images and register it.
+  description: Register a photo (file must already exist at file_path within config directory).
   fields:
     file_path:
       name: File path
-      description: Path to the photo file (must be inside Home Assistant config directory)
+      description: Path to the photo file (within Home Assistant config directory)
       required: true
       selector:
         text:
@@ -449,5 +203,322 @@ send_notification:
     title:
       name: Title
       description: Notification title
+      selector:
+        text:
+
+update_event:
+  name: Update event
+  description: Update an existing calendar event.
+  fields:
+    event_id:
+      name: Event ID
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      selector:
+        text:
+    start_time:
+      name: Start time
+      selector:
+        datetime:
+    end_time:
+      name: End time
+      selector:
+        datetime:
+    all_day:
+      name: All day
+      selector:
+        boolean:
+    calendar_id:
+      name: Calendar / family member ID
+      selector:
+        text:
+    description:
+      name: Description
+      selector:
+        text:
+    location:
+      name: Location
+      selector:
+        text:
+
+delete_event:
+  name: Delete event
+  description: Delete a calendar event.
+  fields:
+    event_id:
+      name: Event ID
+      required: true
+      selector:
+        text:
+
+uncomplete_task:
+  name: Uncomplete task
+  description: Mark a task as not complete and revoke today's completion points.
+  fields:
+    task_id:
+      name: Task ID
+      required: true
+      selector:
+        text:
+
+add_task:
+  name: Add task
+  description: Create a chore or task.
+  fields:
+    title:
+      name: Title
+      required: true
+      selector:
+        text:
+    assignee_id:
+      name: Assignee ID
+      required: true
+      selector:
+        text:
+    category:
+      name: Category
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      default: daily
+      selector:
+        text:
+    icon:
+      name: Icon
+      selector:
+        text:
+    points:
+      name: Points
+      default: 0
+      selector:
+        number:
+          min: 0
+          step: 1
+    due_date:
+      name: Due date
+      selector:
+        text:
+
+update_task:
+  name: Update task
+  description: Update an existing chore or task.
+  fields:
+    task_id:
+      name: Task ID
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      selector:
+        text:
+    assignee_id:
+      name: Assignee ID
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      selector:
+        text:
+    points:
+      name: Points
+      selector:
+        number:
+          min: 0
+          step: 1
+    due_date:
+      name: Due date
+      selector:
+        text:
+
+delete_task:
+  name: Delete task
+  description: Delete a chore or task.
+  fields:
+    task_id:
+      name: Task ID
+      required: true
+      selector:
+        text:
+
+add_reward:
+  name: Add reward
+  description: Create a redeemable reward.
+  fields:
+    name:
+      name: Name
+      required: true
+      selector:
+        text:
+    points_required:
+      name: Points required
+      required: true
+      selector:
+        number:
+          min: 0
+          step: 1
+    description:
+      name: Description
+      selector:
+        text:
+
+delete_reward:
+  name: Delete reward
+  description: Delete a reward.
+  fields:
+    reward_id:
+      name: Reward ID
+      required: true
+      selector:
+        text:
+
+toggle_list_item:
+  name: Toggle list item
+  description: Check or uncheck a list item.
+  fields:
+    item_id:
+      name: Item ID
+      required: true
+      selector:
+        text:
+
+delete_list_item:
+  name: Delete list item
+  description: Remove an item from a list.
+  fields:
+    item_id:
+      name: Item ID
+      required: true
+      selector:
+        text:
+
+delete_list:
+  name: Delete list
+  description: Delete a list and all of its items.
+  fields:
+    list_id:
+      name: List ID
+      required: true
+      selector:
+        text:
+
+add_meal:
+  name: Add meal
+  description: Plan a meal on a date.
+  fields:
+    name:
+      name: Name
+      required: true
+      selector:
+        text:
+    meal_date:
+      name: Meal date
+      required: true
+      selector:
+        text:
+    meal_type:
+      name: Meal type
+      default: Dinner
+      selector:
+        text:
+    meal_recipe_id:
+      name: Recipe ID
+      selector:
+        text:
+
+update_meal:
+  name: Update meal
+  description: Update a planned meal.
+  fields:
+    meal_id:
+      name: Meal ID
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      selector:
+        text:
+    meal_date:
+      name: Meal date
+      selector:
+        text:
+    meal_type:
+      name: Meal type
+      selector:
+        text:
+
+delete_meal:
+  name: Delete meal
+  description: Remove a planned meal.
+  fields:
+    meal_id:
+      name: Meal ID
+      required: true
+      selector:
+        text:
+
+delete_meal_recipe:
+  name: Delete meal recipe
+  description: Delete a recipe from the library.
+  fields:
+    recipe_id:
+      name: Recipe ID
+      required: true
+      selector:
+        text:
+
+add_family_member:
+  name: Add family member
+  description: Add a family profile.
+  fields:
+    name:
+      name: Name
+      required: true
+      selector:
+        text:
+    color:
+      name: Color
+      required: true
+      selector:
+        text:
+    initial:
+      name: Initial
+      selector:
+        text:
+
+update_family_member:
+  name: Update family member
+  description: Update a family profile.
+  fields:
+    member_id:
+      name: Member ID
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      selector:
+        text:
+    color:
+      name: Color
+      selector:
+        text:
+    initial:
+      name: Initial
+      selector:
+        text:
+
+delete_family_member:
+  name: Delete family member
+  description: Remove a family profile and detach related items.
+  fields:
+    member_id:
+      name: Member ID
+      required: true
       selector:
         text:

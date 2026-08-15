@@ -30,17 +30,29 @@ export function getEventProfileColors(
   return colors;
 }
 
-/** Build equal-width horizontal color bands left-to-right. */
-function buildEqualBandsGradient(colors: string[]): string {
+/**
+ * Build SVG data URL for diagonal stripe pattern (-45deg).
+ * stripes: array of hex colors, equal-width bands.
+ */
+function buildDiagonalPatternDataUrl(colors: string[]): string {
   const n = colors.length;
-  const stops = colors
-    .map((color, i) => {
-      const start = (i / n) * 100;
-      const end = ((i + 1) / n) * 100;
-      return `${color} ${start}%, ${color} ${end}%`;
-    })
-    .join(", ");
-  return `linear-gradient(90deg, ${stops})`;
+  const w = 100;
+  const bandWidth = w / n;
+  const rects = colors
+    .map(
+      (c, i) =>
+        `<rect x="${i * bandWidth}" y="0" width="${bandWidth + 1}" height="200" fill="${c}"/>`
+    )
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 100 200">
+  <defs>
+    <pattern id="d" patternUnits="userSpaceOnUse" width="100" height="200" patternTransform="rotate(-45 0 0)">
+      ${rects}
+    </pattern>
+  </defs>
+  <rect width="100" height="200" fill="url(#d)"/>
+</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
 export interface EventColorStyleResult {
@@ -51,7 +63,7 @@ export interface EventColorStyleResult {
 /**
  * Returns style (and border color) for an event based on assigned profiles.
  * Single profile: solid backgroundColor.
- * Multiple profiles: equal-width color bands (no diagonal slashes).
+ * Multiple profiles: diagonal stripe pattern via backgroundImage.
  */
 export function getEventColorStyle(
   profileIds: string[],
@@ -66,10 +78,10 @@ export function getEventColorStyle(
     };
   }
 
-  const gradient = buildEqualBandsGradient(colors);
+  const dataUrl = buildDiagonalPatternDataUrl(colors);
   return {
     style: {
-      backgroundImage: gradient,
+      backgroundImage: dataUrl,
       backgroundSize: "cover",
       backgroundColor: colors[0],
     },

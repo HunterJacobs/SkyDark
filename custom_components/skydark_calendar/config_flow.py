@@ -50,8 +50,8 @@ class SkydarkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input)
-            except ValueError as err:
-                errors["base"] = str(err)
+            except ValueError:
+                errors["base"] = "invalid_family_name"
             else:
                 await self.async_set_unique_id("skydark_calendar")
                 self._abort_if_unique_id_configured()
@@ -84,8 +84,8 @@ class SkydarkOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 await validate_input(self.hass, user_input)
-            except ValueError as err:
-                errors["base"] = str(err)
+            except ValueError:
+                errors["base"] = "invalid_family_name"
             else:
                 return self.async_create_entry(title="", data=user_input)
 

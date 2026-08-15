@@ -1,12 +1,11 @@
 import { useState, useRef } from "react";
-import { usePhotosContext } from "../contexts/PhotosContext";
+import { usePhotosContext, type PhotoItem } from "../contexts/PhotosContext";
 import { useAppContext } from "../contexts/AppContext";
 import PinPrompt from "../components/Common/PinPrompt";
 import CloseIcon from "../components/Common/CloseIcon";
-import MediaImage from "../components/Common/MediaImage";
 
 export default function PhotosView() {
-  const { photos, addPhoto, deletePhoto } = usePhotosContext();
+  const { photos, setPhotos } = usePhotosContext();
   const { setScreensaverTriggered, isFeatureLocked, verifyPin } = useAppContext();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
@@ -15,16 +14,12 @@ export default function PhotosView() {
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const maxSizeBytes = 1.5 * 1024 * 1024; // Keep uploads reasonably small for HA media storage.
-    files.forEach((file) => {
-      if (file.size > maxSizeBytes) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        void addPhoto(dataUrl, "", file.name);
-      };
-      reader.readAsDataURL(file);
-    });
+    const newPhotos: PhotoItem[] = files.map((file, idx) => ({
+      id: `upload-${Date.now()}-${idx}`,
+      url: URL.createObjectURL(file),
+      caption: "",
+    }));
+    setPhotos((prev) => [...newPhotos, ...prev]);
     e.target.value = "";
   };
 
@@ -45,7 +40,11 @@ export default function PhotosView() {
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    void deletePhoto(id);
+    setPhotos((prev) => {
+      const item = prev.find((p) => p.id === id);
+      if (item && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
+      return prev.filter((p) => p.id !== id);
+    });
     if (selectedId === id) setSelectedId(null);
   };
 
@@ -91,7 +90,7 @@ export default function PhotosView() {
               onClick={() => setSelectedId(photo.id)}
               className="absolute inset-0 w-full h-full focus:ring-2 focus:ring-skydark-accent focus:ring-inset"
             >
-              <MediaImage
+              <img
                 src={photo.url}
                 alt={photo.caption || "Photo"}
                 className="w-full h-full object-cover hover:shadow-skydark-hover transition-shadow"
@@ -114,8 +113,8 @@ export default function PhotosView() {
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setSelectedId(null)}
         >
-          <MediaImage
-            src={photos.find((p) => p.id === selectedId)?.url ?? ""}
+          <img
+            src={photos.find((p) => p.id === selectedId)?.url}
             alt=""
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}

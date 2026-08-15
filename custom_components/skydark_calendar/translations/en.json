@@ -28,10 +28,6 @@
         "data": {
           "family_name": "Family name",
           "weather_entity": "Weather entity"
-        },
-        "data_description": {
-          "family_name": "Display name for your family.",
-          "weather_entity": "Home Assistant weather entity to show in the header."
         }
       }
     }
@@ -90,6 +86,78 @@
     "send_notification": {
       "name": "Send notification",
       "description": "Show a notification on the Skydark display."
+    },
+    "update_event": {
+      "name": "Update event",
+      "description": "Update an existing calendar event."
+    },
+    "delete_event": {
+      "name": "Delete event",
+      "description": "Delete a calendar event."
+    },
+    "uncomplete_task": {
+      "name": "Uncomplete task",
+      "description": "Mark a task as not complete and revoke today's completion points."
+    },
+    "add_task": {
+      "name": "Add task",
+      "description": "Create a chore or task."
+    },
+    "update_task": {
+      "name": "Update task",
+      "description": "Update an existing chore or task."
+    },
+    "delete_task": {
+      "name": "Delete task",
+      "description": "Delete a chore or task."
+    },
+    "add_reward": {
+      "name": "Add reward",
+      "description": "Create a redeemable reward."
+    },
+    "delete_reward": {
+      "name": "Delete reward",
+      "description": "Delete a reward."
+    },
+    "toggle_list_item": {
+      "name": "Toggle list item",
+      "description": "Check or uncheck a list item."
+    },
+    "delete_list_item": {
+      "name": "Delete list item",
+      "description": "Remove an item from a list."
+    },
+    "delete_list": {
+      "name": "Delete list",
+      "description": "Delete a list and all of its items."
+    },
+    "add_meal": {
+      "name": "Add meal",
+      "description": "Plan a meal on a date."
+    },
+    "update_meal": {
+      "name": "Update meal",
+      "description": "Update a planned meal."
+    },
+    "delete_meal": {
+      "name": "Delete meal",
+      "description": "Remove a planned meal."
+    },
+    "delete_meal_recipe": {
+      "name": "Delete meal recipe",
+      "description": "Delete a recipe from the library."
+    },
+    "add_family_member": {
+      "name": "Add family member",
+      "description": "Add a family profile."
+    },
+    "update_family_member": {
+      "name": "Update family member",
+      "description": "Update a family profile."
+    },
+    "delete_family_member": {
+      "name": "Delete family member",
+      "description": "Remove a family profile and detach related items."
     }
   }
 }

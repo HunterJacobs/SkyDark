@@ -5,7 +5,7 @@ import PinPrompt from "../components/Common/PinPrompt";
 import { useAppContext } from "../contexts/AppContext";
 import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
 import { usePinGate } from "../hooks/usePinGate";
-import { serviceCreateList, serviceAddListItem } from "../lib/skyDarkApi";
+import { serviceCreateList, serviceAddListItem, serviceToggleListItem, serviceDeleteListItem, serviceDeleteList } from "../lib/skyDarkApi";
 import { SKYDARK_COLORS } from "../config/theme";
 
 export interface ListData {
@@ -95,28 +95,43 @@ export default function ListsView() {
   };
 
   const toggleItem = (listId: string, itemId: string) => {
-    runIfUnlocked("checkLists", () => {
-      if (skydark?.data?.connection) {
-        setLocalToggles((prev) => {
-          const next = new Set(prev);
-          if (next.has(itemId)) next.delete(itemId);
-          else next.add(itemId);
-          return next;
-        });
-      } else {
-        setLocalLists((prev) =>
-          prev.map((list) => {
-            if (list.id !== listId) return list;
-            return { ...list, items: list.items.map((i) => (i.id === itemId ? { ...i, completed: !i.completed } : i)) };
-          })
-        );
+    runIfUnlocked("checkLists", async () => {
+      const conn = skydark?.data?.connection;
+      if (conn) {
+        try {
+          await serviceToggleListItem(conn, itemId);
+          await skydark?.refetch();
+        } catch {
+          setLocalToggles((prev) => {
+            const next = new Set(prev);
+            if (next.has(itemId)) next.delete(itemId);
+            else next.add(itemId);
+            return next;
+          });
+        }
+        return;
       }
+      setLocalLists((prev) =>
+        prev.map((list) => {
+          if (list.id !== listId) return list;
+          return { ...list, items: list.items.map((i) => (i.id === itemId ? { ...i, completed: !i.completed } : i)) };
+        })
+      );
     });
   };
 
-  const deleteItem = (listId: string, itemId: string) => {
-    if (skydark?.data?.connection) setLocalDeletedItems((prev) => new Set(prev).add(itemId));
-    else setLocalLists((prev) => prev.map((list) => (list.id !== listId ? list : { ...list, items: list.items.filter((i) => i.id !== itemId) })));
+  const deleteItem = async (listId: string, itemId: string) => {
+    const conn = skydark?.data?.connection;
+    if (conn) {
+      try {
+        await serviceDeleteListItem(conn, itemId);
+        await skydark?.refetch();
+      } catch {
+        setLocalDeletedItems((prev) => new Set(prev).add(itemId));
+      }
+      return;
+    }
+    setLocalLists((prev) => prev.map((list) => (list.id !== listId ? list : { ...list, items: list.items.filter((i) => i.id !== itemId) })));
   };
 
   const requestDeleteList = (listId: string) => {
@@ -125,9 +140,18 @@ export default function ListsView() {
 
   const confirmDeleteList = () => {
     if (!listToDelete) return;
-    runIfUnlocked("deleteLists", () => {
-      if (skydark?.data?.connection) setLocalDeletedLists((prev) => new Set(prev).add(listToDelete));
-      else setLocalLists((prev) => prev.filter((l) => l.id !== listToDelete));
+    runIfUnlocked("deleteLists", async () => {
+      const conn = skydark?.data?.connection;
+      if (conn) {
+        try {
+          await serviceDeleteList(conn, listToDelete);
+          await skydark?.refetch();
+        } catch {
+          setLocalDeletedLists((prev) => new Set(prev).add(listToDelete));
+        }
+      } else {
+        setLocalLists((prev) => prev.filter((l) => l.id !== listToDelete));
+      }
       setListToDelete(null);
     });
   };
@@ -165,7 +189,7 @@ export default function ListsView() {
     : lists;
 
   return (
-    <div className="min-h-full">
+    <div className="h-full">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h2 className="text-lg font-semibold text-skydark-text">Lists</h2>
         <div className="flex items-center gap-2 flex-wrap">
@@ -193,8 +217,13 @@ export default function ListsView() {
           </button>
         </div>
       </div>
-      <div className="flex flex-col gap-6 pb-4">
-        {filteredLists.map((list) => (
+      <div className="flex gap-6 overflow-x-auto pb-4">
+        {filteredLists.length === 0 ? (
+          <div className="rounded-card bg-white shadow-skydark p-8 text-center text-skydark-text-secondary w-full">
+            No lists yet. Create one to get started.
+          </div>
+        ) : (
+          filteredLists.map((list) => (
           <ListCard
             key={list.id}
             id={list.id}
@@ -207,7 +236,8 @@ export default function ListsView() {
             onDeleteItem={(itemId) => deleteItem(list.id, itemId)}
             onDeleteList={() => requestDeleteList(list.id)}
           />
-        ))}
+          ))
+        )}
       </div>
 
       <Modal open={addListOpen} onClose={() => setAddListOpen(false)} title="Create list">

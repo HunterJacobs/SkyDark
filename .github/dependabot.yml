@@ -1,0 +1,46 @@
+version: 2
+registries:
+  fortawesome:
+    type: "npm-registry"
+    url: "https://npm.fontawesome.com/"
+    token: ${{secrets.FONTAWESOME_NPM_AUTH_TOKEN}}
+updates:
+  - package-ecosystem: "devcontainers" # See documentation for possible values
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "10:00"
+      timezone: "America/New_York"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+  - package-ecosystem: "npm"
+    registries:
+      - fortawesome
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "10:00"
+      timezone: "America/New_York"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    groups:
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss*"
+      fontawesome:
+        patterns:
+          - "@fortawesome*"
+      bugsnag:
+        patterns:
+          - "@bugsnag*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"

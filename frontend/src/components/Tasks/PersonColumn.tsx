@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FamilyMember } from "../../types/calendar";
 import type { Task } from "../../types/tasks";
+import { isCompletedToday } from "../../lib/taskSchedule";
 import TaskItem from "./TaskItem";
 
 interface PersonColumnProps {
@@ -25,7 +26,7 @@ export default function PersonColumn({
   const [expanded, setExpanded] = useState(false);
   const total = tasks.length;
   const displayTasks = hideCompleted
-    ? tasks.filter((t) => !t.completed_date)
+    ? tasks.filter((t) => !isCompletedToday(t.completed_date))
     : tasks;
   const visibleTasks = expanded ? displayTasks : displayTasks.slice(0, 5);
   const hasMoreThanFive = displayTasks.length > 5;

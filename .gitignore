@@ -1,7 +1,11 @@
-# SkyDark – ignore build artifacts, deps, and local config (see CONTRIBUTING.md for layout)
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+
+# Standalone
+standalone/node_modules/
+data/
 
 # Python
 __pycache__/
@@ -26,3 +30,8 @@ Thumbs.db
 config/
 # Allow frontend source config (theme, etc.)
 !frontend/src/config/
+
+# Build artifacts
+frontend/*.tsbuildinfo
+.vite/
+.npmrc.bak

@@ -1,13 +1,10 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import MobileNav from "./MobileNav";
 import Header from "./Header";
 import { useAppContext } from "../../contexts/AppContext";
 import { usePhotosContext } from "../../contexts/PhotosContext";
-import { useSkydarkDataContext } from "../../contexts/SkydarkDataContext";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
-import { useResolvedMediaUrl } from "../../hooks/useResolvedMediaUrl";
 import { useWeeklyWeather, getWeatherIcon } from "../../hooks/useWeeklyWeather";
 
 function SleepModeTime() {
@@ -89,7 +86,6 @@ function SleepModeWeather() {
 function ScreenSaverOverlay() {
   const { settings, screensaverTriggered, setScreensaverTriggered } = useAppContext();
   const { photos } = usePhotosContext();
-  const conn = useSkydarkDataContext()?.data?.connection ?? null;
   const { isIdle, reset } = useIdleDetection(
     settings.screensaverIdleMinutes,
     settings.screensaverEnabled
@@ -98,7 +94,7 @@ function ScreenSaverOverlay() {
     (settings.screensaverSlideshowIntervalUnit ?? "seconds") === "minutes"
       ? (settings.screensaverSlideshowIntervalMinutes ?? 1) * 60 * 1000
       : (settings.screensaverSlideshowIntervalSeconds ?? 5) * 1000;
-  const durationMs = settings.screensaverTransitionDurationMs ?? 1200;
+  const durationMs = settings.screensaverTransitionDurationMs ?? 800;
   const transitionType = settings.screensaverTransitionType ?? "fade";
 
   const [index, setIndex] = useState(0);
@@ -138,10 +134,8 @@ function ScreenSaverOverlay() {
   const currentPhoto = photos[index];
   const nextIndex = (index + 1) % photos.length;
   const nextPhoto = photos[nextIndex];
-  const currentUrl = useResolvedMediaUrl(currentPhoto?.url ?? "", conn);
-  const nextUrl = useResolvedMediaUrl(nextPhoto?.url ?? "", conn);
-  const transitionStyle = { transition: `opacity ${durationMs}ms ease-out` };
-  const slideStyle = { transition: `transform ${durationMs}ms ease-out` };
+  const transitionStyle = { transition: `opacity ${durationMs}ms ease-in-out` };
+  const slideStyle = { transition: `transform ${durationMs}ms ease-in-out` };
 
   const dismiss = () => {
     if (transitionEndRef.current) clearTimeout(transitionEndRef.current);
@@ -149,17 +143,6 @@ function ScreenSaverOverlay() {
     reset();
     setScreensaverTriggered(false);
   };
-
-  // Preload resolved URLs to avoid black frames on transitions.
-  useEffect(() => {
-    if (!currentUrl) return;
-    const preload = (url: string) => {
-      const img = new Image();
-      img.src = url;
-    };
-    preload(currentUrl);
-    if (nextUrl) preload(nextUrl);
-  }, [currentUrl, nextUrl]);
 
   if (!show) return null;
 
@@ -176,7 +159,7 @@ function ScreenSaverOverlay() {
     >
       {singleImage ? (
         <img
-          src={currentUrl}
+          src={currentPhoto?.url}
           alt={currentPhoto?.caption || "Slideshow"}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           draggable={false}
@@ -184,7 +167,7 @@ function ScreenSaverOverlay() {
       ) : transitionType === "fade" ? (
         <>
           <img
-            src={currentUrl}
+            src={currentPhoto?.url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{ ...transitionStyle, opacity: visibleLayer === 0 ? 1 : 0 }}
@@ -192,7 +175,7 @@ function ScreenSaverOverlay() {
             aria-hidden
           />
           <img
-            src={nextUrl}
+            src={nextPhoto?.url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{ ...transitionStyle, opacity: visibleLayer === 1 ? 1 : 0 }}
@@ -200,7 +183,7 @@ function ScreenSaverOverlay() {
             aria-hidden
           />
           <img
-            src={visibleLayer === 0 ? currentUrl : nextUrl}
+            src={visibleLayer === 0 ? currentPhoto?.url : nextPhoto?.url}
             alt={currentPhoto?.caption || nextPhoto?.caption || "Slideshow"}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none sr-only"
             draggable={false}
@@ -209,7 +192,7 @@ function ScreenSaverOverlay() {
       ) : (
         <>
           <img
-            src={currentUrl}
+            src={currentPhoto?.url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{
@@ -220,7 +203,7 @@ function ScreenSaverOverlay() {
             aria-hidden
           />
           <img
-            src={nextUrl}
+            src={nextPhoto?.url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{
@@ -231,7 +214,7 @@ function ScreenSaverOverlay() {
             aria-hidden
           />
           <img
-            src={visibleLayer === 0 ? currentUrl : nextUrl}
+            src={visibleLayer === 0 ? currentPhoto?.url : nextPhoto?.url}
             alt={currentPhoto?.caption || nextPhoto?.caption || "Slideshow"}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none sr-only"
             draggable={false}
@@ -251,7 +234,6 @@ interface MainLayoutProps {
 export default function MainLayout({ children }: MainLayoutProps) {
   const { pathname } = useLocation();
   const { settings, isLocked, setIsLocked } = useAppContext();
-  const [isPortrait, setIsPortrait] = useState(false);
   const { isIdle } = useIdleDetection(
     settings.autoRelockMinutes,
     !!(settings.lockEnabled && !isLocked && settings.autoRelockEnabled)
@@ -261,48 +243,25 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (isIdle) setIsLocked(true);
   }, [isIdle, setIsLocked]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mediaQuery = window.matchMedia("(orientation: portrait)");
-    const updateOrientation = () => setIsPortrait(mediaQuery.matches);
-    updateOrientation();
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", updateOrientation);
-      return () => mediaQuery.removeEventListener("change", updateOrientation);
-    }
-    mediaQuery.addListener(updateOrientation);
-    return () => mediaQuery.removeListener(updateOrientation);
-  }, []);
-
   const isCalendar = pathname.includes("calendar");
-  // Keep desktop calendar locked to viewport; allow mobile pages to scroll naturally.
-  const shouldLockToViewport = isCalendar && !isPortrait;
-
   return (
     <div
       className={`flex bg-skydark-bg font-sans text-skydark-text max-w-full ${
-        isPortrait ? "flex-col" : ""
-      } ${
-        shouldLockToViewport ? "h-screen overflow-hidden" : "min-h-screen"
+        isCalendar ? "h-screen overflow-hidden" : "min-h-screen"
       }`}
     >
-      {!isPortrait && <Sidebar />}
-      <div
-        className={`flex flex-1 flex-col min-w-0 ${
-          shouldLockToViewport ? "min-h-0 overflow-hidden" : "min-h-screen"
-        }`}
-      >
-        {!isPortrait && <MobileNav />}
+      <Sidebar />
+      <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
         <Header />
         <main
-          className={`flex-1 p-5 sm:p-6 ${
-            shouldLockToViewport ? "min-h-0 overflow-hidden" : "overflow-y-auto"
-          } ${isPortrait ? "pb-24" : ""}`}
+          className={`flex-1 p-5 sm:p-6 min-h-0 pb-24 md:pb-6 ${
+            isCalendar ? "overflow-hidden" : "overflow-auto"
+          }`}
         >
           {children}
         </main>
-        {isPortrait && <MobileNav position="bottom" forceVisible iconOnly />}
       </div>
+      <Sidebar mobile />
       <ScreenSaverOverlay />
     </div>
   );

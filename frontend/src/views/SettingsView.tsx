@@ -18,7 +18,6 @@ import {
 } from "../components/Settings/SettingsIcons";
 import { useViewportSimulator } from "../contexts/ViewportSimulatorContext";
 import { VIEWPORT_PRESETS } from "../lib/viewportPresets";
-import { useWeatherData } from "../hooks/useWeeklyWeather";
 
 export default function SettingsView() {
   const {
@@ -34,9 +33,9 @@ export default function SettingsView() {
   } = useAppContext();
   const navigate = useNavigate();
   const viewportSimulator = useViewportSimulator();
-  const weather = useWeatherData();
   const pendingPinActionRef = useRef<(() => void) | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
+  const [weatherEntity, setWeatherEntity] = useState("");
   const [showDisableLockPrompt, setShowDisableLockPrompt] = useState(false);
   const [showSetPin, setShowSetPin] = useState(false);
   const [setPinStep, setSetPinStep] = useState<"current" | "new" | "confirm">("current");
@@ -175,7 +174,7 @@ export default function SettingsView() {
                       className="flex items-center gap-3 p-3 rounded-card-lg bg-white shadow-skydark"
                     >
                       <div
-                        className="w-10 h-10 aspect-square rounded-full shrink-0 flex items-center justify-center text-white font-semibold"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
                         style={{ backgroundColor: m.color }}
                       >
                         {m.initial}
@@ -215,43 +214,15 @@ export default function SettingsView() {
 
             <SettingsSection title="Display" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Weather ZIP code (US)</label>
-                <div className="flex items-center gap-2 max-w-md">
-                  <input
-                    type="tel"
-                    value={settings.weatherZipCode ?? ""}
-                    onChange={(e) => setSettings({ weatherZipCode: e.target.value })}
-                    placeholder="12345"
-                    className="input-skydark flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => weather.refresh()}
-                    disabled={weather.refreshing}
-                    className="btn-secondary whitespace-nowrap disabled:opacity-60"
-                  >
-                    {weather.refreshing ? "Refreshing..." : "Refresh"}
-                  </button>
-                </div>
-                {weather.locationLabel && (
-                  <p className="mt-1 text-xs text-skydark-text-secondary">
-                    {weather.locationLabel}
-                  </p>
-                )}
-                <p className="mt-1 text-xs text-skydark-text-secondary">
-                  Leave blank to use device location.
-                </p>
+                <label className="block text-sm font-medium text-skydark-text mb-1.5">Weather entity (Home Assistant)</label>
+                <input
+                  type="text"
+                  value={weatherEntity}
+                  onChange={(e) => setWeatherEntity(e.target.value)}
+                  placeholder="weather.home"
+                  className="input-skydark max-w-md"
+                />
               </div>
-              <SettingRow
-                label="Show 7-day forecast in top header"
-                control={
-                  <Toggle
-                    checked={settings.showTopWeeklyForecast ?? false}
-                    onChange={(checked) => setSettings({ showTopWeeklyForecast: checked })}
-                    aria-label="Show top 7-day forecast"
-                  />
-                }
-              />
             </SettingsSection>
 
             <SettingsSection title="Volume" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>

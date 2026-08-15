@@ -9,6 +9,11 @@ export default defineConfig({
         },
     },
     base: "/skydark/",
+    server: {
+        proxy: {
+            "/api": "http://localhost:4000",
+        },
+    },
     build: {
         outDir: resolve(__dirname, "../custom_components/skydark_calendar/www"),
         emptyOutDir: true,
