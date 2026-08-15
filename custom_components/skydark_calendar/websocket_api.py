@@ -285,6 +285,152 @@ async def websocket_get_meal_recipes(
         connection.send_error(msg["id"], "failed", "An error occurred loading recipes.")
 
 
+@websocket_api.websocket_command(
+    {vol.Required("type"): "skydark_calendar/get_ha_calendars"}
+)
+@websocket_api.async_response
+async def websocket_get_ha_calendars(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """List Home Assistant calendar entities that can be synced."""
+    from .calendar_sync import list_ha_calendars
+
+    connection.send_result(msg["id"], {"calendars": list_ha_calendars(hass)})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "skydark_calendar/get_sync_status"}
+)
+@websocket_api.async_response
+async def websocket_get_sync_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return configured sync links plus available HA calendars."""
+    from .calendar_sync import list_ha_calendars
+
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    links = await hass.async_add_executor_job(db.get_sync_links)
+    sync = hass.data.get(DOMAIN, {}).get("sync")
+    connection.send_result(
+        msg["id"],
+        {
+            "calendars": list_ha_calendars(hass),
+            "links": links,
+            "last_run": getattr(sync, "last_run", None),
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/save_sync_link",
+        vol.Required("entity_id"): str,
+        vol.Optional("name"): str,
+        vol.Optional("pull_enabled"): bool,
+        vol.Optional("push_enabled"): bool,
+        vol.Optional("import_existing"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_save_sync_link(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Create or update a per-calendar sync link."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    from .calendar_sync import list_ha_calendars
+
+    calendars = {item["entity_id"]: item for item in list_ha_calendars(hass)}
+    info = calendars.get(msg["entity_id"])
+    if not info:
+        connection.send_error(msg["id"], "not_found", "Calendar entity not found")
+        return
+    if msg.get("push_enabled") and not info.get("can_create"):
+        connection.send_error(
+            msg["id"],
+            "read_only",
+            "This calendar cannot receive new events from Home Assistant.",
+        )
+        return
+    link_id = await hass.async_add_executor_job(
+        partial(
+            db.upsert_sync_link,
+            entity_id=msg["entity_id"],
+            name=msg.get("name") or info["name"],
+            pull_enabled=msg.get("pull_enabled"),
+            push_enabled=msg.get("push_enabled"),
+            import_existing=msg.get("import_existing"),
+        )
+    )
+    sync = hass.data.get(DOMAIN, {}).get("sync")
+    summary = None
+    if sync and (msg.get("pull_enabled") or msg.get("push_enabled") or msg.get("import_existing")):
+        summary = await sync.async_sync_all(
+            import_all=bool(msg.get("import_existing")),
+            only_entity_id=msg["entity_id"],
+        )
+    connection.send_result(msg["id"], {"link_id": link_id, "sync": summary})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/delete_sync_link",
+        vol.Required("entity_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_delete_sync_link(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Remove a sync link. Imported events stay in SkyDark."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    link = await hass.async_add_executor_job(db.get_sync_link_by_entity, msg["entity_id"])
+    if link:
+        await hass.async_add_executor_job(db.delete_sync_link, link["id"])
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/sync_now",
+        vol.Optional("entity_id"): str,
+        vol.Optional("import_existing"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_sync_now(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Run calendar sync immediately."""
+    sync = hass.data.get(DOMAIN, {}).get("sync")
+    if not sync:
+        connection.send_error(msg["id"], "not_ready", "Sync is not running")
+        return
+    summary = await sync.async_sync_all(
+        import_all=bool(msg.get("import_existing")),
+        only_entity_id=msg.get("entity_id"),
+    )
+    connection.send_result(msg["id"], summary)
+
+
 async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     """Register WebSocket API handlers (skip if already registered on reload)."""
     if hass.data.get(DOMAIN, {}).get("ws_registered"):
@@ -298,4 +444,9 @@ async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_points)
     websocket_api.async_register_command(hass, websocket_get_rewards)
     websocket_api.async_register_command(hass, websocket_get_meal_recipes)
+    websocket_api.async_register_command(hass, websocket_get_ha_calendars)
+    websocket_api.async_register_command(hass, websocket_get_sync_status)
+    websocket_api.async_register_command(hass, websocket_save_sync_link)
+    websocket_api.async_register_command(hass, websocket_delete_sync_link)
+    websocket_api.async_register_command(hass, websocket_sync_now)
     hass.data.setdefault(DOMAIN, {})["ws_registered"] = True

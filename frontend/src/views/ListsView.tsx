@@ -260,7 +260,7 @@ export default function ListsView() {
                   key={c}
                   type="button"
                   onClick={() => setNewListColor(c)}
-                  className="w-8 h-8 rounded-full border-2"
+                  className="btn-swatch"
                   style={{
                     backgroundColor: c,
                     borderColor: newListColor === c ? "#2B3A4A" : "transparent",
@@ -310,7 +310,7 @@ export default function ListsView() {
           <button type="button" onClick={() => setListToDelete(null)} className="btn-secondary flex-1">
             Cancel
           </button>
-          <button type="button" onClick={confirmDeleteList} className="btn-primary flex-1 bg-red-500 hover:bg-red-600">
+          <button type="button" onClick={confirmDeleteList} className="btn-danger flex-1">
             Delete
           </button>
         </div>

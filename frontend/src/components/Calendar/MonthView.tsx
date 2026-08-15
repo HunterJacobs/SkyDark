@@ -114,7 +114,7 @@ export default function MonthView({
               {moreCount > 0 && (
                 <button
                   type="button"
-                  className="text-xs text-skydark-text-secondary hover:underline w-full text-left"
+                  className="w-full text-left text-xs font-medium text-skydark-text-secondary px-2 py-1.5 rounded-lg hover:bg-gray-100"
                   onClick={() => onDateClick?.(d)}
                 >
                   +{moreCount} more

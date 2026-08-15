@@ -70,15 +70,17 @@ export default function Modal({ open, onClose, title, children, variant = "cente
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-2 -ml-2 rounded-lg hover:bg-gray-100 text-skydark-text-secondary"
-                  aria-label="Back"
+                  className="btn-icon -ml-1"
+                  aria-label="Close"
                 >
-                  ←
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
                 </button>
                 <h2 id="modal-title" className="text-lg font-semibold text-skydark-text text-center min-w-0">
                   {title}
                 </h2>
-                <div className="w-10 flex justify-end">{rightAction ?? null}</div>
+                <div className="w-11 flex justify-end">{rightAction ?? null}</div>
               </div>
               <div className="p-4 overflow-auto flex-1">{children}</div>
             </motion.div>

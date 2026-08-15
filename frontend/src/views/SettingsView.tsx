@@ -16,6 +16,7 @@ import {
   LockIcon,
   DeveloperIcon,
 } from "../components/Settings/SettingsIcons";
+import CalendarSyncSettings from "../components/Settings/CalendarSyncSettings";
 import { useViewportSimulator } from "../contexts/ViewportSimulatorContext";
 import { VIEWPORT_PRESETS } from "../lib/viewportPresets";
 
@@ -184,7 +185,7 @@ export default function SettingsView() {
                         <button
                           type="button"
                           onClick={() => setEditColorMember({ id: m.id, name: m.name, color: m.color })}
-                          className="text-sm font-medium text-skydark-accent hover:underline"
+                          className="btn-ghost text-skydark-accent hover:text-skydark-accent"
                         >
                           Edit color
                         </button>
@@ -192,7 +193,7 @@ export default function SettingsView() {
                           type="button"
                           onClick={() => setMemberToDelete({ id: m.id, name: m.name })}
                           disabled={members.length <= 1}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-skydark-text-secondary hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-skydark-text-secondary"
+                          className="btn-icon hover:bg-red-50 text-skydark-text-secondary hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-skydark-text-secondary"
                           aria-label={`Delete ${m.name}`}
                           title={members.length <= 1 ? "At least one profile is required" : `Delete ${m.name}`}
                         >
@@ -205,7 +206,7 @@ export default function SettingsView() {
                 <button
                   type="button"
                   onClick={() => setAddProfileOpen(true)}
-                  className="mt-2 text-sm font-medium text-skydark-accent hover:underline"
+                  className="btn-ghost mt-2 text-skydark-accent hover:text-skydark-accent"
                 >
                   + Add profile
                 </button>
@@ -265,7 +266,7 @@ export default function SettingsView() {
                       setShowSetPin(true);
                       (window as unknown as { __pendingPinAction?: () => void }).__pendingPinAction = undefined;
                     }}
-                    className="text-sm font-medium text-skydark-accent hover:underline"
+                    className="btn-ghost text-skydark-accent hover:text-skydark-accent"
                   >
                     Change PIN
                   </button>
@@ -352,25 +353,7 @@ export default function SettingsView() {
             <h2 className="text-xl font-semibold text-skydark-text mb-6">Calendar</h2>
 
             <SettingsSection title="Calendar sync" icon={<CalendarSettingsIcon className="w-5 h-5 text-skydark-text-secondary" />}>
-              <p className="text-sm text-skydark-text-secondary mb-3">
-                Connect Google or Microsoft Calendar in a future update for two-way sync.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary disabled:opacity-60"
-                  disabled
-                >
-                  Connect Google Calendar (coming soon)
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary disabled:opacity-60"
-                  disabled
-                >
-                  Connect Microsoft Calendar (coming soon)
-                </button>
-              </div>
+              <CalendarSyncSettings />
             </SettingsSection>
           </>
         )}
@@ -642,7 +625,7 @@ export default function SettingsView() {
                   removeFamilyMember(memberToDelete.id);
                   setMemberToDelete(null);
                 }}
-                className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600"
+                className="btn-danger"
               >
                 Delete
               </button>

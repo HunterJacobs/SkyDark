@@ -71,7 +71,7 @@ export default function AddProfileModal({ open, onClose, onAdd }: AddProfileModa
               <button
                 type="button"
                 onClick={() => setShowAppMessage(false)}
-                className="shrink-0 p-1 rounded-lg hover:bg-gray-200 text-skydark-text-secondary"
+                className="shrink-0 btn-icon w-9 h-9"
                 aria-label="Dismiss"
               >
                 <CloseIcon className="w-4 h-4" />

@@ -203,7 +203,7 @@ export default function MealModal({
                 setImageUrl(viewRecipe.imageUrl);
               }
             }}
-            className="p-2 rounded-lg hover:bg-gray-100 text-skydark-text-secondary font-medium text-sm"
+            className="btn-ghost"
             aria-label="Edit meal"
           >
             Edit
@@ -310,7 +310,7 @@ export default function MealModal({
                   onRemove(editSlot.id);
                   onClose();
                 }}
-                className="mt-3 w-full py-2.5 rounded-xl border border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 transition-colors shrink-0"
+                className="mt-3 btn-danger-outline w-full shrink-0"
               >
                 Remove from this day
               </button>
@@ -417,7 +417,7 @@ export default function MealModal({
                     <button
                       type="button"
                       onClick={handleRemovePhoto}
-                      className="btn-secondary text-sm text-red-600 border-red-200 hover:bg-red-50"
+                      className="btn-danger-outline text-sm"
                     >
                       Remove
                     </button>
@@ -440,7 +440,7 @@ export default function MealModal({
                 <button
                   type="button"
                   onClick={addIngredient}
-                  className="text-sm font-medium text-skydark-accent hover:underline"
+                  className="btn-ghost text-skydark-accent hover:text-skydark-accent min-h-[36px] px-2"
                 >
                   + Add ingredient
                 </button>
@@ -472,7 +472,7 @@ export default function MealModal({
                     <button
                       type="button"
                       onClick={() => removeIngredient(idx)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                      className="btn-icon text-red-500 hover:bg-red-50 hover:text-red-600"
                       aria-label="Remove ingredient"
                     >
                       <CloseIcon className="w-4 h-4" />
@@ -515,7 +515,7 @@ export default function MealModal({
                       onRemoveFromLibrary(editSlot.recipeId!);
                       onClose();
                     }}
-                    className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 transition-colors"
+                    className="btn-danger-outline w-full"
                   >
                     Delete from library
                   </button>
@@ -530,7 +530,7 @@ export default function MealModal({
                       onRemoveFromLibrary(viewRecipe.id);
                       onClose();
                     }}
-                    className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 transition-colors"
+                    className="btn-danger-outline w-full"
                   >
                     Delete from library
                   </button>

@@ -29,7 +29,7 @@ export default function MobileNav({
           key={path}
           to={path}
           className={({ isActive }) =>
-            `${iconOnly ? "flex-1 justify-center px-2" : "px-3"} flex items-center gap-1.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+            `${iconOnly ? "flex-1 justify-center px-2" : "px-3"} flex items-center gap-1.5 py-2 min-h-[44px] rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
               isActive
                 ? "bg-[rgba(59,155,191,0.1)] text-skydark-accent"
                 : "text-skydark-text-secondary hover:bg-gray-100"

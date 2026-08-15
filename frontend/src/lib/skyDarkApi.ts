@@ -19,6 +19,9 @@ export interface SkydarkEvent {
   color?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  external_id?: string | null;
+  external_source?: string | null;
+  sync_push_targets?: string | null;
 }
 
 export interface SkydarkTask {
@@ -153,6 +156,17 @@ export async function fetchMealRecipes(conn: Connection): Promise<{ recipes: Sky
   return send(conn, { type: "skydark_calendar/get_meal_recipes" });
 }
 
+export function parseSyncTargets(raw?: string | null): string[] | null {
+  if (raw == null || raw === "") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    /* ignore */
+  }
+  return raw.split(",").map((part) => part.trim()).filter(Boolean);
+}
+
 /** Normalize backend event to frontend CalendarEvent shape */
 export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
   const calendar_id = e.calendar_id;
@@ -172,8 +186,9 @@ export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
     location: e.location ?? undefined,
     calendar_id: ids,
     recurrence_rule: undefined,
-    external_id: undefined,
-    external_source: undefined,
+    external_id: e.external_id ?? undefined,
+    external_source: e.external_source ?? undefined,
+    sync_push_targets: parseSyncTargets(e.sync_push_targets ?? null) ?? undefined,
   };
 }
 
@@ -198,11 +213,13 @@ export async function serviceAddEvent(
     calendar_id?: string | string[];
     description?: string;
     location?: string;
+    sync_push_targets?: string[];
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "add_event", {
     ...data,
     calendar_id: calendarIdParam(data.calendar_id),
+    sync_push_targets: data.sync_push_targets ? JSON.stringify(data.sync_push_targets) : undefined,
   });
 }
 
@@ -217,11 +234,13 @@ export async function serviceUpdateEvent(
     calendar_id?: string | string[];
     description?: string;
     location?: string;
+    sync_push_targets?: string[];
   }
 ): Promise<unknown> {
   return callService(conn, DOMAIN, "update_event", {
     ...data,
     calendar_id: calendarIdParam(data.calendar_id),
+    sync_push_targets: data.sync_push_targets ? JSON.stringify(data.sync_push_targets) : undefined,
   });
 }
 
@@ -401,4 +420,70 @@ export async function serviceUpdateFamilyMember(
 
 export async function serviceDeleteFamilyMember(conn: Connection, memberId: string): Promise<unknown> {
   return callService(conn, DOMAIN, "delete_family_member", { member_id: memberId });
+}
+
+/** Resolve a Home Assistant media-source URL to a browser-fetchable path. */
+export async function resolveMediaUrl(conn: Connection, mediaContentId: string): Promise<string | null> {
+  if (!mediaContentId) return null;
+  if (!mediaContentId.startsWith("media-source://")) return mediaContentId;
+  try {
+    const result = await conn.sendMessagePromise<{ url?: string }>({
+      type: "media_source/resolve_media",
+      media_content_id: mediaContentId,
+    });
+    return result?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface HaCalendarInfo {
+  entity_id: string;
+  name: string;
+  can_create: boolean;
+  can_delete: boolean;
+  features_known: boolean;
+}
+
+export interface CalendarSyncLink {
+  id: string;
+  entity_id: string;
+  name?: string | null;
+  pull_enabled: number | boolean;
+  push_enabled: number | boolean;
+  import_existing: number | boolean;
+  last_synced_at?: string | null;
+  last_error?: string | null;
+}
+
+export async function fetchSyncStatus(conn: Connection): Promise<{
+  calendars: HaCalendarInfo[];
+  links: CalendarSyncLink[];
+  last_run?: string | null;
+}> {
+  return send(conn, { type: "skydark_calendar/get_sync_status" });
+}
+
+export async function saveSyncLink(
+  conn: Connection,
+  data: {
+    entity_id: string;
+    name?: string;
+    pull_enabled?: boolean;
+    push_enabled?: boolean;
+    import_existing?: boolean;
+  }
+): Promise<{ link_id: string }> {
+  return send(conn, { type: "skydark_calendar/save_sync_link", ...data });
+}
+
+export async function deleteSyncLink(conn: Connection, entityId: string): Promise<{ ok: boolean }> {
+  return send(conn, { type: "skydark_calendar/delete_sync_link", entity_id: entityId });
+}
+
+export async function syncCalendarsNow(
+  conn: Connection,
+  data?: { entity_id?: string; import_existing?: boolean }
+): Promise<unknown> {
+  return send(conn, { type: "skydark_calendar/sync_now", ...data });
 }

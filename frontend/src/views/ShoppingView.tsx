@@ -219,14 +219,14 @@ export default function ShoppingView() {
         </label>
       </div>
 
-      <div className="flex gap-0 border-b border-gray-200 mb-4">
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 mb-4 w-fit max-w-full">
         <button
           type="button"
           onClick={() => setActiveTab("meals")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          className={`btn-segment ${
             activeTab === "meals"
-              ? "text-skydark-accent border-b-2 border-skydark-accent bg-[rgba(59,155,191,0.06)]"
-              : "text-skydark-text-secondary hover:text-skydark-text hover:bg-gray-50"
+              ? "bg-white text-skydark-text shadow-sm"
+              : "text-skydark-text-secondary hover:text-skydark-text"
           }`}
         >
           Meals
@@ -234,10 +234,10 @@ export default function ShoppingView() {
         <button
           type="button"
           onClick={() => setActiveTab("ingredients")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          className={`btn-segment ${
             activeTab === "ingredients"
-              ? "text-skydark-accent border-b-2 border-skydark-accent bg-[rgba(59,155,191,0.06)]"
-              : "text-skydark-text-secondary hover:text-skydark-text hover:bg-gray-50"
+              ? "bg-white text-skydark-text shadow-sm"
+              : "text-skydark-text-secondary hover:text-skydark-text"
           }`}
         >
           Total ingredients
@@ -263,7 +263,7 @@ export default function ShoppingView() {
                     <button
                       type="button"
                       onClick={() => toggleExpanded(meal.id)}
-                      className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center justify-between gap-2 p-3 min-h-[44px] text-left hover:bg-gray-50 transition-colors"
                     >
                       <span className="font-medium text-skydark-text truncate">
                         {meal.name}
@@ -332,7 +332,7 @@ export default function ShoppingView() {
                     <button
                       type="button"
                       onClick={() => toggleExpandedIngredient(key)}
-                      className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center justify-between gap-2 p-3 min-h-[44px] text-left hover:bg-gray-50 transition-colors"
                     >
                       <span className="font-semibold text-skydark-text">
                         {group.displayName}
@@ -363,16 +363,20 @@ export default function ShoppingView() {
                                   e.stopPropagation();
                                   toggleItem(item.id);
                                 }}
-                                className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center"
-                                style={{
-                                  borderColor: checked[item.id] ? "#9EE5CC" : "#D1D5DB",
-                                  backgroundColor: checked[item.id] ? "#9EE5CC" : "white",
-                                }}
+                                className="btn-check"
                                 aria-label={checked[item.id] ? "Mark not bought" : "Mark bought"}
                               >
-                                {checked[item.id] && (
-                                  <span className="text-white text-sm font-bold">✓</span>
-                                )}
+                                <span
+                                  className="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                                  style={{
+                                    borderColor: checked[item.id] ? "#9EE5CC" : "#D1D5DB",
+                                    backgroundColor: checked[item.id] ? "#9EE5CC" : "white",
+                                  }}
+                                >
+                                  {checked[item.id] && (
+                                    <span className="text-white text-sm font-bold">✓</span>
+                                  )}
+                                </span>
                               </button>
                               <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                                 <span

@@ -18,6 +18,7 @@ _ALLOWED_TABLES = frozenset({
     "family_members", "events", "tasks", "lists", "list_items",
     "meal_recipes", "meal_ingredients", "meals", "app_settings",
     "photos", "rewards", "points_log",
+    "calendar_sync_links", "calendar_sync_maps", "calendar_sync_tombstones",
 })
 
 SCHEMA = """
@@ -159,6 +160,39 @@ CREATE TABLE IF NOT EXISTS points_log (
 CREATE INDEX IF NOT EXISTS idx_points_log_member ON points_log(member_id);
 
 CREATE INDEX IF NOT EXISTS idx_meals_date ON meals(meal_date);
+
+CREATE TABLE IF NOT EXISTS calendar_sync_links (
+  id TEXT PRIMARY KEY,
+  entity_id TEXT NOT NULL UNIQUE,
+  name TEXT,
+  pull_enabled INTEGER DEFAULT 0,
+  push_enabled INTEGER DEFAULT 0,
+  import_existing INTEGER DEFAULT 0,
+  last_synced_at TEXT,
+  last_error TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS calendar_sync_maps (
+  id TEXT PRIMARY KEY,
+  link_id TEXT NOT NULL,
+  skydark_event_id TEXT NOT NULL,
+  remote_uid TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  last_hash TEXT,
+  UNIQUE(link_id, skydark_event_id),
+  UNIQUE(link_id, remote_uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_maps_event ON calendar_sync_maps(skydark_event_id);
+CREATE INDEX IF NOT EXISTS idx_sync_maps_link ON calendar_sync_maps(link_id);
+
+CREATE TABLE IF NOT EXISTS calendar_sync_tombstones (
+  link_id TEXT NOT NULL,
+  remote_uid TEXT NOT NULL,
+  created_at TEXT,
+  PRIMARY KEY (link_id, remote_uid)
+);
 """
 
 
@@ -277,6 +311,8 @@ class SkydarkDatabase:
                 conn.execute("ALTER TABLE lists ADD COLUMN list_type TEXT DEFAULT 'general'")
             if not self._column_exists(conn, "meals", "meal_recipe_id"):
                 conn.execute("ALTER TABLE meals ADD COLUMN meal_recipe_id TEXT")
+            if not self._column_exists(conn, "events", "sync_push_targets"):
+                conn.execute("ALTER TABLE events ADD COLUMN sync_push_targets TEXT")
             self._seed_if_empty(conn)
 
         with self._connection() as conn:
@@ -404,19 +440,21 @@ class SkydarkDatabase:
         recurrence_rule: str | None = None,
         external_id: str | None = None,
         external_source: str | None = None,
+        sync_push_targets: str | None = None,
+        event_id: str | None = None,
     ) -> str:
-        id_ = str(uuid.uuid4())
+        id_ = event_id or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             conn.execute(
-                """INSERT INTO events (id, title, description, start_time, end_time, all_day, location, calendar_id, external_id, external_source, recurrence_rule, color, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO events (id, title, description, start_time, end_time, all_day, location, calendar_id, external_id, external_source, recurrence_rule, color, created_at, updated_at, sync_push_targets)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     id_,
                     title,
                     description or "",
-                    start_time.isoformat(),
-                    end_time.isoformat() if end_time else None,
+                    start_time.isoformat() if hasattr(start_time, "isoformat") else str(start_time),
+                    end_time.isoformat() if end_time and hasattr(end_time, "isoformat") else (str(end_time) if end_time else None),
                     1 if all_day else 0,
                     location or "",
                     calendar_id,
@@ -426,12 +464,32 @@ class SkydarkDatabase:
                     color,
                     now,
                     now,
+                    sync_push_targets,
                 ),
             )
         return id_
 
+    def get_event(self, id_: str) -> dict | None:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM events WHERE id = ?", (id_,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def update_event(self, id_: str, **kwargs: Any) -> None:
-        allowed = {"title", "description", "start_time", "end_time", "all_day", "location", "calendar_id", "color", "recurrence_rule"}
+        allowed = {
+            "title",
+            "description",
+            "start_time",
+            "end_time",
+            "all_day",
+            "location",
+            "calendar_id",
+            "color",
+            "recurrence_rule",
+            "external_id",
+            "external_source",
+            "sync_push_targets",
+        }
         updates = []
         values = []
         for k, v in kwargs.items():
@@ -456,7 +514,152 @@ class SkydarkDatabase:
 
     def delete_event(self, id_: str) -> None:
         with self._connection() as conn:
+            conn.execute("DELETE FROM calendar_sync_maps WHERE skydark_event_id = ?", (id_,))
             conn.execute("DELETE FROM events WHERE id = ?", (id_,))
+
+    # Calendar sync
+    def get_sync_links(self) -> list[dict]:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM calendar_sync_links ORDER BY name, entity_id")
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_sync_link(self, link_id: str) -> dict | None:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM calendar_sync_links WHERE id = ?", (link_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_sync_link_by_entity(self, entity_id: str) -> dict | None:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM calendar_sync_links WHERE entity_id = ?", (entity_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def upsert_sync_link(
+        self,
+        entity_id: str,
+        name: str | None = None,
+        pull_enabled: bool | None = None,
+        push_enabled: bool | None = None,
+        import_existing: bool | None = None,
+    ) -> str:
+        existing = self.get_sync_link_by_entity(entity_id)
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            if existing:
+                fields = []
+                values: list[Any] = []
+                if name is not None:
+                    fields.append("name = ?")
+                    values.append(name)
+                if pull_enabled is not None:
+                    fields.append("pull_enabled = ?")
+                    values.append(1 if pull_enabled else 0)
+                if push_enabled is not None:
+                    fields.append("push_enabled = ?")
+                    values.append(1 if push_enabled else 0)
+                if import_existing is not None:
+                    fields.append("import_existing = ?")
+                    values.append(1 if import_existing else 0)
+                if fields:
+                    values.append(existing["id"])
+                    conn.execute(
+                        f"UPDATE calendar_sync_links SET {', '.join(fields)} WHERE id = ?",
+                        values,
+                    )
+                return existing["id"]
+            id_ = str(uuid.uuid4())
+            conn.execute(
+                """INSERT INTO calendar_sync_links
+                   (id, entity_id, name, pull_enabled, push_enabled, import_existing, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    id_,
+                    entity_id,
+                    name or entity_id,
+                    1 if pull_enabled else 0,
+                    1 if push_enabled else 0,
+                    1 if import_existing else 0,
+                    now,
+                ),
+            )
+            return id_
+
+    def delete_sync_link(self, link_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM calendar_sync_maps WHERE link_id = ?", (link_id,))
+            conn.execute("DELETE FROM calendar_sync_tombstones WHERE link_id = ?", (link_id,))
+            conn.execute("DELETE FROM calendar_sync_links WHERE id = ?", (link_id,))
+
+    def set_sync_link_status(self, link_id: str, last_error: str | None = None) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE calendar_sync_links SET last_synced_at = ?, last_error = ? WHERE id = ?",
+                (now, last_error, link_id),
+            )
+
+    def get_sync_maps(self, link_id: str) -> list[dict]:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM calendar_sync_maps WHERE link_id = ?", (link_id,))
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_sync_maps_for_event(self, event_id: str) -> list[dict]:
+        with self._connection() as conn:
+            cur = conn.execute(
+                "SELECT * FROM calendar_sync_maps WHERE skydark_event_id = ?",
+                (event_id,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def upsert_sync_map(
+        self,
+        link_id: str,
+        skydark_event_id: str,
+        remote_uid: str,
+        origin: str,
+        last_hash: str | None,
+    ) -> None:
+        with self._connection() as conn:
+            cur = conn.execute(
+                "SELECT id FROM calendar_sync_maps WHERE link_id = ? AND skydark_event_id = ?",
+                (link_id, skydark_event_id),
+            )
+            row = cur.fetchone()
+            if row:
+                conn.execute(
+                    "UPDATE calendar_sync_maps SET remote_uid = ?, origin = ?, last_hash = ? WHERE id = ?",
+                    (remote_uid, origin, last_hash, row["id"]),
+                )
+                return
+            conn.execute(
+                """INSERT INTO calendar_sync_maps (id, link_id, skydark_event_id, remote_uid, origin, last_hash)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (str(uuid.uuid4()), link_id, skydark_event_id, remote_uid, origin, last_hash),
+            )
+
+    def delete_sync_map(self, link_id: str, skydark_event_id: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM calendar_sync_maps WHERE link_id = ? AND skydark_event_id = ?",
+                (link_id, skydark_event_id),
+            )
+
+    def add_tombstone(self, link_id: str, remote_uid: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO calendar_sync_tombstones (link_id, remote_uid, created_at) VALUES (?, ?, ?)",
+                (link_id, remote_uid, now),
+            )
+
+    def is_tombstoned(self, link_id: str, remote_uid: str) -> bool:
+        with self._connection() as conn:
+            cur = conn.execute(
+                "SELECT 1 FROM calendar_sync_tombstones WHERE link_id = ? AND remote_uid = ?",
+                (link_id, remote_uid),
+            )
+            return cur.fetchone() is not None
 
     # Tasks
     def get_tasks(

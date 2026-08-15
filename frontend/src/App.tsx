@@ -17,7 +17,7 @@ function ViewErrorFallback() {
       <button
         type="button"
         onClick={() => window.location.reload()}
-        className="px-4 py-2 rounded-xl bg-skydark-accent text-white font-medium"
+        className="btn-primary"
       >
         Reload page
       </button>
@@ -79,7 +79,7 @@ function ConnectionErrorScreen({ message, onRetry }: { message: string; onRetry:
       <button
         type="button"
         onClick={onRetry}
-        className="px-5 py-2.5 rounded-xl bg-[#3B9BBF] text-white font-medium hover:opacity-90"
+        className="btn-primary"
       >
         Retry
       </button>

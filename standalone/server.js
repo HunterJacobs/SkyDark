@@ -90,6 +90,16 @@ function handleMessage(msg) {
       const recipes = getMealRecipesWithIngredients();
       return sendResult({ recipes });
     }
+    case "skydark_calendar/get_ha_calendars":
+      return sendResult({ calendars: [] });
+    case "skydark_calendar/get_sync_status":
+      return sendResult({ calendars: [], links: [], last_run: null });
+    case "skydark_calendar/save_sync_link":
+      return sendError("unsupported", "Calendar sync requires Home Assistant calendar entities.");
+    case "skydark_calendar/delete_sync_link":
+      return sendResult({ ok: true });
+    case "skydark_calendar/sync_now":
+      return sendResult({ ok: true, links: [] });
     case "call_service": {
       if (msg.domain !== "skydark_calendar") return sendError("invalid_domain", "Unknown domain");
       const sd = msg.service_data || {};

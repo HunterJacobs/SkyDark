@@ -13,7 +13,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DB_NAME, DOMAIN, PANEL_ICON, PANEL_TITLE, PANEL_URL
+from .const import (
+    CONF_IMPORT_EXISTING,
+    CONF_PULL_CALENDARS,
+    CONF_PUSH_CALENDARS,
+    DB_NAME,
+    DOMAIN,
+    PANEL_ICON,
+    PANEL_TITLE,
+    PANEL_URL,
+)
 from .database import SkydarkDatabase
 from .services import SERVICES as _SERVICES
 from .websocket_api import async_register_websocket_handlers
@@ -104,6 +113,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["entry_id"] = entry.entry_id
         hass.data[DOMAIN]["config"] = {**entry.data, **(entry.options or {})}
 
+        from .calendar_sync import SkydarkCalendarSync
+
+        sync = SkydarkCalendarSync(hass, db)
+        hass.data[DOMAIN]["sync"] = sync
+        cfg = hass.data[DOMAIN]["config"]
+        existing_links = await hass.async_add_executor_job(db.get_sync_links)
+        if not existing_links and (cfg.get(CONF_PULL_CALENDARS) or cfg.get(CONF_PUSH_CALENDARS)):
+            await sync.apply_config_links(
+                list(cfg.get(CONF_PULL_CALENDARS) or []),
+                list(cfg.get(CONF_PUSH_CALENDARS) or []),
+                bool(cfg.get(CONF_IMPORT_EXISTING, True)),
+            )
+        elif existing_links:
+            hass.async_create_task(sync.async_sync_all())
+        sync.start()
+
         await async_register_websocket_handlers(hass)
 
         from . import services as skydark_services
@@ -111,6 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await skydark_services.async_setup_services(hass)
 
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        entry.async_on_unload(entry.add_update_listener(_async_update_listener))
         return True
     except Exception as err:
         _LOGGER.exception("Skydark Calendar setup failed: %s", err)
@@ -123,12 +149,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Apply options (including calendar sync) without requiring a reinstall."""
+    if DOMAIN not in hass.data:
+        return
+    hass.data[DOMAIN]["config"] = {**entry.data, **(entry.options or {})}
+    sync = hass.data[DOMAIN].get("sync")
+    cfg = hass.data[DOMAIN]["config"]
+    if not sync:
+        return
+    pull = list(cfg.get(CONF_PULL_CALENDARS) or [])
+    push = list(cfg.get(CONF_PUSH_CALENDARS) or [])
+    if pull or push:
+        await sync.apply_config_links(pull, push, bool(cfg.get(CONF_IMPORT_EXISTING, False)))
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     for name in _SERVICES:
         hass.services.async_remove(DOMAIN, name)
     if DOMAIN in hass.data:
+        sync = hass.data[DOMAIN].pop("sync", None)
+        if sync:
+            sync.stop()
         hass.data[DOMAIN].pop("db", None)
         hass.data[DOMAIN].pop("panel_url", None)
         hass.data[DOMAIN].pop("entry_id", None)

@@ -182,8 +182,8 @@ export default function TaskModal({
                   key={m.id}
                   type="button"
                   onClick={() => setAssigneeId(m.id)}
-                  className={`flex flex-col items-center gap-1.5 rounded-full ${
-                    assigneeId === m.id ? "ring-2 ring-skydark-accent ring-offset-2" : ""
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-xl ${
+                    assigneeId === m.id ? "bg-skydark-accent-bg ring-2 ring-skydark-accent" : "hover:bg-gray-50"
                   }`}
                 >
                   <div
@@ -197,7 +197,7 @@ export default function TaskModal({
               ))}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 text-skydark-text-secondary hover:text-skydark-accent"
+                className="flex flex-col items-center gap-1 p-1.5 rounded-xl text-skydark-text-secondary hover:text-skydark-accent hover:bg-gray-50"
                 aria-label="Add profile"
               >
                 <div className="w-12 h-12 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-xl font-light">
@@ -214,7 +214,7 @@ export default function TaskModal({
               <button
                 type="button"
                 onClick={() => setTaskType("chore")}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                className={`btn-chip ${
                   taskType === "chore"
                     ? "bg-skydark-text text-white"
                     : "bg-gray-100 text-skydark-text-secondary hover:bg-gray-200"
@@ -225,7 +225,7 @@ export default function TaskModal({
               <button
                 type="button"
                 onClick={() => setTaskType("routine")}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                className={`btn-chip ${
                   taskType === "routine"
                     ? "bg-skydark-text text-white"
                     : "bg-gray-100 text-skydark-text-secondary hover:bg-gray-200"
@@ -298,7 +298,7 @@ export default function TaskModal({
                     key={day}
                     type="button"
                     onClick={() => toggleWeekday(day)}
-                    className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    className={`btn-chip ${
                       weekdays.includes(day)
                         ? "bg-skydark-accent text-white"
                         : "bg-gray-100 text-skydark-text-secondary hover:bg-gray-200"
@@ -388,7 +388,7 @@ export default function TaskModal({
                           key={day}
                           type="button"
                           onClick={() => setCustomWeekday(day)}
-                          className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          className={`btn-chip ${
                             customWeekday === day ? "bg-skydark-accent text-white" : "bg-gray-100 text-skydark-text-secondary hover:bg-gray-200"
                           }`}
                         >
@@ -441,7 +441,7 @@ export default function TaskModal({
                 onDelete(task.id);
                 onClose();
               }}
-              className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 transition-colors"
+              className="btn-danger-outline w-full"
             >
               Delete
             </button>

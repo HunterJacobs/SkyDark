@@ -11,7 +11,7 @@ A Skydark Calendar-style family organization panel for Home Assistant: calendar,
 - **Photos**: Grid and slideshow
 - **Rewards**: Points and reward tracking per family member
 - **Sleep**: Bedtime and routine checklists
-- **Settings**: Family name, member colors, weather entity, calendar sync placeholders
+- **Settings**: Family name, member colors, weather entity, two-way calendar sync
 - **Home Assistant**: Custom panel, SQLite storage, services (`add_event`, `complete_task`, `add_list_item`, `send_notification`), sensors (tasks today, completed, next event), event bus for automations
 
 ## Installation
@@ -126,15 +126,24 @@ The backend is the Home Assistant custom component. Use a Python environment mat
 - `skydark_calendar.add_meal` / `update_meal` / `delete_meal` / `add_meal_recipe` / `delete_meal_recipe`
 - `skydark_calendar.add_family_member` / `update_family_member` / `delete_family_member`
 - `skydark_calendar.add_reward` / `delete_reward` / `add_points` / `redeem_reward`
-- `skydark_calendar.upload_photo` / `send_notification`
+- `skydark_calendar.upload_photo` / `send_notification` / `sync_calendars`
 
 ## Automations
 
 The integration fires `skydark_calendar_event_created` when an event is added via the service, and `skydark_calendar_updated` after any data mutation. Use them as triggers in automations.
 
-## Google / Microsoft Calendar
+## Calendar sync
 
-Stubs are in place (`google_calendar.py`, `microsoft_calendar.py`). Full OAuth and two-way sync can be added later.
+SkyDark syncs through Home Assistant calendar entities, so Google, Outlook, CalDAV, and Local Calendar all work once they are connected in HA.
+
+1. In Home Assistant, add the official integration for your provider (Google Calendar, Microsoft 365 / Outlook, CalDAV, or Local Calendar).
+2. During SkyDark setup (or later in **Settings → Calendar**), choose:
+   - **Import into SkyDark** — events from that calendar appear on the family calendar.
+   - **Export SkyDark events** — events you create in SkyDark are created on that calendar.
+   - **Import existing events** — copy current history (about two years back and forward) on first link.
+3. When adding an event in SkyDark, use **Also add to** to pick which export calendars receive that event.
+
+Sync runs every 15 minutes and after you add, edit, or delete an event. SkyDark’s own `calendar.skydark_*` entity is never used as a sync target, so it cannot loop.
 
 ## UI
 

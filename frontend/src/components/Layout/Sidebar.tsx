@@ -18,7 +18,7 @@ function ShoppingIcon() {
   );
 }
 
-const navItems = [
+export const navItems = [
   { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
   { path: "/lists", label: "Lists", Icon: ListsIcon },
   { path: "/tasks", label: "Chores", Icon: CheckIcon },
@@ -57,7 +57,7 @@ export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
   if (mobile) {
     return (
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-white py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
         aria-label="Mobile navigation"
       >
         {nav}

@@ -47,6 +47,7 @@ SERVICE_UPDATE_FAMILY_MEMBER = "update_family_member"
 SERVICE_DELETE_FAMILY_MEMBER = "delete_family_member"
 SERVICE_UPLOAD_PHOTO = "upload_photo"
 SERVICE_SEND_NOTIFICATION = "send_notification"
+SERVICE_SYNC_CALENDARS = "sync_calendars"
 
 SERVICES = (
     SERVICE_ADD_EVENT,
@@ -76,6 +77,7 @@ SERVICES = (
     SERVICE_DELETE_FAMILY_MEMBER,
     SERVICE_UPLOAD_PHOTO,
     SERVICE_SEND_NOTIFICATION,
+    SERVICE_SYNC_CALENDARS,
 )
 
 ADD_EVENT_SCHEMA = vol.Schema(
@@ -88,6 +90,7 @@ ADD_EVENT_SCHEMA = vol.Schema(
         vol.Optional("description"): cv.string,
         vol.Optional("location"): cv.string,
         vol.Optional("color"): cv.string,
+        vol.Optional("sync_push_targets"): vol.Any(cv.string, [cv.string]),
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -103,6 +106,7 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
         vol.Optional("description"): cv.string,
         vol.Optional("location"): cv.string,
         vol.Optional("color"): cv.string,
+        vol.Optional("sync_push_targets"): vol.Any(cv.string, [cv.string]),
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -355,6 +359,25 @@ def _schedule_payload(data: dict[str, Any]) -> dict[str, Any] | None:
     return payload or None
 
 
+def _encode_sync_targets(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return json.dumps([str(v) for v in value])
+    text = str(value).strip()
+    if not text:
+        return json.dumps([])
+    if text.startswith("["):
+        return text
+    return json.dumps([part.strip() for part in text.split(",") if part.strip()])
+
+
+def _request_calendar_sync(hass: HomeAssistant) -> None:
+    sync = hass.data.get(DOMAIN, {}).get("sync")
+    if sync:
+        sync.request_sync()
+
+
 def _normalize_ingredients(value: Any) -> list | str | None:
     if value is None:
         return None
@@ -402,12 +425,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             description=call.data.get("description"),
             location=call.data.get("location"),
             color=call.data.get("color"),
+            sync_push_targets=_encode_sync_targets(call.data.get("sync_push_targets")),
         )
         if event_id:
             hass.bus.async_fire(
                 "skydark_calendar_event_created",
                 {"event_id": event_id, "title": call.data["title"]},
             )
+            _request_calendar_sync(hass)
 
     async def update_event(call: ServiceCall) -> None:
         db = _get_db(hass)
@@ -427,13 +452,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             if k in call.data
         }
+        if "sync_push_targets" in call.data:
+            fields["sync_push_targets"] = _encode_sync_targets(call.data.get("sync_push_targets"))
         await _run_db(hass, partial(db.update_event, call.data["event_id"], **fields))
+        _request_calendar_sync(hass)
 
     async def delete_event(call: ServiceCall) -> None:
         db = _get_db(hass)
         if not db:
             return
-        await _run_db(hass, db.delete_event, call.data["event_id"])
+        event_id = call.data["event_id"]
+        sync = hass.data.get(DOMAIN, {}).get("sync")
+        if sync:
+            await sync.async_handle_local_delete(event_id)
+        await _run_db(hass, db.delete_event, event_id)
+
+    async def sync_calendars(call: ServiceCall) -> None:
+        sync = hass.data.get(DOMAIN, {}).get("sync")
+        if not sync:
+            return
+        entity_id = call.data.get("entity_id")
+        import_all = bool(call.data.get("import_existing", False))
+        await sync.async_sync_all(import_all=import_all, only_entity_id=entity_id)
 
     async def complete_task(call: ServiceCall) -> None:
         db = _get_db(hass)
@@ -731,6 +771,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_DELETE_FAMILY_MEMBER, delete_family_member, DELETE_FAMILY_MEMBER_SCHEMA),
         (SERVICE_UPLOAD_PHOTO, upload_photo, UPLOAD_PHOTO_SCHEMA),
         (SERVICE_SEND_NOTIFICATION, send_notification, SEND_NOTIFICATION_SCHEMA),
+        (SERVICE_SYNC_CALENDARS, sync_calendars, vol.Schema({
+            vol.Optional("entity_id"): cv.string,
+            vol.Optional("import_existing", default=False): cv.boolean,
+        }, extra=vol.PREVENT_EXTRA)),
     )
     for name, handler, schema in registrations:
         hass.services.async_register(DOMAIN, name, handler, schema=schema)

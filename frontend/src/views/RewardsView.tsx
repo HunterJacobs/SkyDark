@@ -241,7 +241,7 @@ export default function RewardsView() {
                             key={m.id}
                             type="button"
                             onClick={() => handleRedeemClick(m.id, r.id, r.points)}
-                            className="w-8 h-8 rounded-full text-white text-xs font-semibold flex-shrink-0 hover:opacity-90"
+                            className="w-11 h-11 rounded-full text-white text-sm font-semibold flex-shrink-0 hover:opacity-90"
                             style={{ backgroundColor: m.color }}
                             title={`Redeem for ${m.name}`}
                           >
@@ -253,7 +253,7 @@ export default function RewardsView() {
                     <button
                       type="button"
                       onClick={() => requestDeleteReward(r.id)}
-                      className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-skydark-text-secondary hover:bg-red-50 hover:text-red-600 transition-colors"
+                      className="btn-icon flex-shrink-0 hover:bg-red-50 hover:text-red-600"
                       aria-label="Delete reward"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>

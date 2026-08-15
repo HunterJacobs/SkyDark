@@ -93,6 +93,7 @@ export default function CalendarView() {
             calendar_id: data.calendar_id,
             description: data.description,
             location: data.location,
+            sync_push_targets: data.sync_push_targets,
           });
         } else if (data.id) {
           await serviceUpdateEvent(conn, {
@@ -104,6 +105,7 @@ export default function CalendarView() {
             calendar_id: data.calendar_id,
             description: data.description,
             location: data.location,
+            sync_push_targets: data.sync_push_targets,
           });
         }
         await skydark?.refetchEvents();
@@ -218,17 +220,18 @@ export default function CalendarView() {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="flex flex-shrink-0 items-center justify-between mb-6">
+      <div className="flex flex-shrink-0 flex-col gap-3 mb-4 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold text-skydark-text">
           {viewMode === "month" && format(currentDate, "MMMM yyyy")}
           {viewMode === "week" && `Week of ${format(currentDate, "MMM d")}`}
           {viewMode === "day" && format(currentDate, "EEEE, MMM d")}
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <select
             value={viewMode}
             onChange={(e) => setViewMode(e.target.value as "month" | "week" | "day")}
-            className="input-skydark"
+            className="input-skydark !w-auto min-w-[7.5rem]"
+            aria-label="Calendar view"
           >
             <option value="month">Month</option>
             <option value="week">Week</option>
@@ -245,29 +248,35 @@ export default function CalendarView() {
               setMemberVisibility((prev) => ({ ...prev, [id]: visible }))
             }
           />
-          <button
-            type="button"
-            onClick={goPrev}
-            className="p-2 rounded-xl hover:bg-gray-100 min-h-0 min-w-0"
-            aria-label="Previous"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            onClick={goToday}
-            className="px-3 py-2.5 rounded-xl bg-gray-100 text-skydark-text font-medium text-sm min-h-0 min-w-0"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={goNext}
-            className="p-2 rounded-xl hover:bg-gray-100 min-h-0 min-w-0"
-            aria-label="Next"
-          >
-            →
-          </button>
+          <div className="flex items-center rounded-xl bg-gray-100 p-0.5">
+            <button
+              type="button"
+              onClick={goPrev}
+              className="btn-icon"
+              aria-label="Previous"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={goToday}
+              className="btn-ghost text-skydark-text"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              className="btn-icon"
+              aria-label="Next"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       {viewMode === "month" && (

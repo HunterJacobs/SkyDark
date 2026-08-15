@@ -99,7 +99,7 @@ export default function PhotosView() {
             <button
               type="button"
               onClick={(e) => handleDelete(e, photo.id)}
-              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-lg font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-600"
+              className="absolute top-2 right-2 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500"
               aria-label="Delete photo"
             >
               <CloseIcon className="w-4 h-4" />

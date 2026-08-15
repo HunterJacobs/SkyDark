@@ -51,8 +51,8 @@ export default function FilterDropdown({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`px-3 py-2 rounded-xl text-sm font-medium min-h-0 min-w-0 flex items-center gap-1.5 ${
-          open ? "bg-skydark-accent-bg text-skydark-accent" : "text-skydark-text-secondary hover:bg-gray-100"
+        className={`btn-ghost gap-1.5 ${
+          open ? "bg-skydark-accent-bg text-skydark-accent hover:bg-skydark-accent-bg" : ""
         }`}
         aria-expanded={open}
         aria-haspopup="true"
@@ -110,7 +110,7 @@ export default function FilterDropdown({
                       <button
                         type="button"
                         onClick={() => onEditMember(member)}
-                        className="p-1.5 rounded-lg text-skydark-text-secondary hover:bg-gray-200 hover:text-skydark-text"
+                        className="btn-icon w-9 h-9"
                         aria-label={`Edit ${member.name}`}
                       >
                         <PencilIcon className="w-4 h-4" />

@@ -15,7 +15,7 @@ export default function FloatingActionButton({ items }: FloatingActionButtonProp
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="fixed bottom-8 right-8 z-30 flex flex-col-reverse items-end gap-2">
+    <div className="fixed z-30 flex flex-col-reverse items-end gap-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 md:bottom-8 md:right-8">
       <AnimatePresence>
         {open &&
           items.map((item, i) => (
@@ -30,7 +30,7 @@ export default function FloatingActionButton({ items }: FloatingActionButtonProp
                 item.onClick();
                 setOpen(false);
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow-skydark hover:shadow-skydark-hover text-skydark-text text-sm font-medium"
+              className="flex items-center gap-2 px-4 min-h-11 rounded-full bg-white shadow-skydark hover:shadow-skydark-hover text-skydark-text text-sm font-medium"
             >
               {item.icon}
               {item.label}
@@ -40,7 +40,7 @@ export default function FloatingActionButton({ items }: FloatingActionButtonProp
       <motion.button
         type="button"
         onClick={() => (items.length === 1 ? items[0].onClick() : setOpen((o) => !o))}
-        className="flex items-center justify-center w-14 h-14 rounded-full bg-skydark-accent text-white shadow-fab hover:opacity-90"
+        className="flex items-center justify-center w-14 h-14 rounded-full bg-skydark-accent text-white shadow-fab hover:opacity-90 active:opacity-80"
         aria-label={items.length === 1 ? (items[0].label ?? "Add") : open ? "Close menu" : "Add"}
         animate={{ rotate: open ? 45 : 0 }}
         transition={{ duration: 0.2 }}

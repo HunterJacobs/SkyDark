@@ -65,7 +65,7 @@ export default function ListCard({
             <button
               type="button"
               onClick={onDeleteList}
-              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+              className="btn-icon w-9 h-9 text-red-500 hover:bg-red-50 hover:text-red-600"
               aria-label="Delete list"
               title="Delete list"
             >

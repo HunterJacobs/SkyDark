@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Skydark Family Calendar",
-        "description": "Configure your family calendar. You can link Google and Microsoft calendars later in Settings.",
+        "description": "Configure your family calendar. Next you can link Home Assistant calendars (Google, Outlook, CalDAV, and more).",
         "data": {
           "family_name": "Family name",
           "weather_entity": "Weather entity (optional)"
@@ -11,6 +11,20 @@
         "data_description": {
           "family_name": "Display name for your family (e.g. \"The Millers\").",
           "weather_entity": "Home Assistant weather entity to show in the header."
+        }
+      },
+      "sync": {
+        "title": "Calendar sync",
+        "description": "Connect Google, Outlook, CalDAV, or Local Calendar in Home Assistant first. Then choose what SkyDark should import and what it should send out. You can change this later in the Skydark Settings panel.",
+        "data": {
+          "pull_calendars": "Import events into SkyDark from",
+          "push_calendars": "Send SkyDark events to",
+          "import_existing": "Import all existing events from the selected calendars now"
+        },
+        "data_description": {
+          "pull_calendars": "Events on these calendars appear in SkyDark. Leave empty to skip import.",
+          "push_calendars": "New SkyDark events are created on these calendars. Leave empty to keep events only in SkyDark.",
+          "import_existing": "If enabled, SkyDark copies the current calendar history (about two years back and forward) on first sync."
         }
       }
     },
@@ -28,6 +42,15 @@
         "data": {
           "family_name": "Family name",
           "weather_entity": "Weather entity"
+        }
+      },
+      "sync": {
+        "title": "Calendar sync",
+        "description": "Choose which Home Assistant calendars SkyDark should import from and export to.",
+        "data": {
+          "pull_calendars": "Import events into SkyDark from",
+          "push_calendars": "Send SkyDark events to",
+          "import_existing": "Import all existing events now"
         }
       }
     }
@@ -158,6 +181,10 @@
     "delete_family_member": {
       "name": "Delete family member",
       "description": "Remove a family profile and detach related items."
+    },
+    "sync_calendars": {
+      "name": "Sync calendars",
+      "description": "Run two-way sync with linked Home Assistant calendars now."
     }
   }
 }

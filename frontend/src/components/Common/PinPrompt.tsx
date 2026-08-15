@@ -136,24 +136,28 @@ export default function PinPrompt({
                 </p>
               )}
               <div className="grid grid-cols-3 gap-2 mb-4">
-                {DIGITS.map((d) => (
-                  <button
-                    key={d || "back"}
-                    type="button"
-                    onClick={() => handleDigit(d)}
-                    disabled={verifying}
-                    className={`
-                      h-14 rounded-xl text-xl font-medium transition-colors
-                      ${d === "⌫"
-                        ? "bg-gray-200 text-skydark-text hover:bg-gray-300"
-                        : "bg-gray-100 text-skydark-text hover:bg-gray-200"}
-                      disabled:opacity-60
-                    `}
-                    aria-label={d === "⌫" ? "Backspace" : d || undefined}
-                  >
-                    {d === "⌫" ? "⌫" : d}
-                  </button>
-                ))}
+                {DIGITS.map((d, i) =>
+                  d === "" ? (
+                    <span key={`empty-${i}`} aria-hidden className="h-14" />
+                  ) : (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleDigit(d)}
+                      disabled={verifying}
+                      className={`
+                        h-14 rounded-xl text-xl font-medium transition-colors
+                        ${d === "⌫"
+                          ? "bg-gray-200 text-skydark-text hover:bg-gray-300"
+                          : "bg-gray-100 text-skydark-text hover:bg-gray-200"}
+                        disabled:opacity-60
+                      `}
+                      aria-label={d === "⌫" ? "Backspace" : d}
+                    >
+                      {d}
+                    </button>
+                  )
+                )}
               </div>
               <div className="flex gap-2">
                 <button

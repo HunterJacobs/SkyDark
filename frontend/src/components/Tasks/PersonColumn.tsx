@@ -77,7 +77,7 @@ export default function PersonColumn({
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
-              className="text-sm text-skydark-accent hover:underline font-medium"
+              className="btn-ghost w-full text-skydark-accent hover:text-skydark-accent"
               aria-label={expanded ? `Show less chores for ${member.name}` : `Display all chores for ${member.name}`}
             >
               {expanded ? "Show less" : "Display all"}

@@ -7,6 +7,8 @@ import Toggle from "../Common/Toggle";
 import AddProfileModal from "../Settings/AddProfileModal";
 import { useAppContext } from "../../contexts/AppContext";
 import { toDatetimeLocalValue, localDateTimeToISO } from "../../lib/dates";
+import { fetchSyncStatus, type CalendarSyncLink } from "../../lib/skyDarkApi";
+import { useSkydarkDataContext } from "../../contexts/SkydarkDataContext";
 
 type EventModalMode = "view" | "edit" | "create";
 
@@ -39,7 +41,10 @@ export default function EventModal({
   const [countdown, setCountdown] = useState(false);
   const [reminder, setReminder] = useState(false);
   const [addProfileModalOpen, setAddProfileModalOpen] = useState(false);
+  const [pushCalendars, setPushCalendars] = useState<{ entity_id: string; name: string }[]>([]);
+  const [selectedPushTargets, setSelectedPushTargets] = useState<string[] | null>(null);
   const { addFamilyMember } = useAppContext();
+  const conn = useSkydarkDataContext()?.data?.connection ?? null;
 
   useEffect(() => {
     if (open && event) setMode("view");
@@ -60,6 +65,7 @@ export default function EventModal({
       setSelectedProfileIds(ids);
       setDescription(event.description || "");
       setLocation(event.location || "");
+      setSelectedPushTargets(event.sync_push_targets ?? null);
     } else {
       const now = new Date();
       const end = new Date(now.getTime() + 60 * 60 * 1000);
@@ -73,11 +79,43 @@ export default function EventModal({
       setRepeats(false);
       setCountdown(false);
       setReminder(false);
+      setSelectedPushTargets(null);
     }
   }, [event, open, familyMembers]);
 
+  useEffect(() => {
+    if (!open || !conn) {
+      setPushCalendars([]);
+      return;
+    }
+    let cancelled = false;
+    fetchSyncStatus(conn)
+      .then((status) => {
+        if (cancelled) return;
+        const names = new Map(status.calendars.map((cal) => [cal.entity_id, cal.name]));
+        const enabled = (status.links || [])
+          .filter((link: CalendarSyncLink) => link.push_enabled === 1 || link.push_enabled === true)
+          .map((link) => ({
+            entity_id: link.entity_id,
+            name: link.name || names.get(link.entity_id) || link.entity_id,
+          }));
+        setPushCalendars(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setPushCalendars([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, conn]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const allIds = pushCalendars.map((cal) => cal.entity_id);
+    const chosen = selectedPushTargets ?? allIds;
+    const allSelected =
+      selectedPushTargets == null ||
+      (allIds.length > 0 && chosen.length === allIds.length && allIds.every((id) => chosen.includes(id)));
     onSave({
       ...(event?.id && { id: event.id }),
       title,
@@ -87,8 +125,18 @@ export default function EventModal({
       calendar_id: selectedProfileIds.length > 0 ? selectedProfileIds : undefined,
       description: description || undefined,
       location: location || undefined,
+      sync_push_targets: allSelected ? undefined : chosen,
     });
     onClose();
+  };
+
+  const togglePushTarget = (entityId: string) => {
+    const allIds = pushCalendars.map((cal) => cal.entity_id);
+    const current = selectedPushTargets ?? allIds;
+    const next = current.includes(entityId)
+      ? current.filter((id) => id !== entityId)
+      : [...current, entityId];
+    setSelectedPushTargets(next);
   };
 
   const toggleProfile = (id: string) => {
@@ -120,7 +168,7 @@ export default function EventModal({
           <button
             type="button"
             onClick={() => setMode("edit")}
-            className="p-2 rounded-lg hover:bg-gray-100 text-skydark-text-secondary"
+            className="btn-icon"
             aria-label="Edit event"
             title="Edit"
           >
@@ -172,6 +220,14 @@ export default function EventModal({
             <div>
               <p className="text-sm text-skydark-text-secondary mb-0.5">Description</p>
               <p className="text-skydark-text whitespace-pre-wrap">{description}</p>
+            </div>
+          )}
+          {event?.external_source && (
+            <div>
+              <p className="text-sm text-skydark-text-secondary mb-0.5">Imported from</p>
+              <p className="text-skydark-text">
+                {pushCalendars.find((cal) => cal.entity_id === event.external_source)?.name || event.external_source}
+              </p>
             </div>
           )}
         </div>
@@ -255,7 +311,7 @@ export default function EventModal({
                     key={m.id}
                     type="button"
                     onClick={() => toggleProfile(m.id)}
-                    className={`flex flex-col items-center gap-1.5 rounded-full ${selected ? "ring-2 ring-skydark-accent ring-offset-2" : ""}`}
+                    className={`flex flex-col items-center gap-1 p-1.5 rounded-xl ${selected ? "bg-skydark-accent-bg ring-2 ring-skydark-accent" : "hover:bg-gray-50"}`}
                   >
                     <div
                       className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm"
@@ -270,7 +326,7 @@ export default function EventModal({
               <button
                 type="button"
                 onClick={() => setAddProfileModalOpen(true)}
-                className="flex flex-col items-center gap-1.5 text-skydark-text-secondary hover:text-skydark-accent"
+                className="flex flex-col items-center gap-1 p-1.5 rounded-xl text-skydark-text-secondary hover:text-skydark-accent hover:bg-gray-50"
                 aria-label="Add profile"
               >
                 <div className="w-12 h-12 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-xl font-light">
@@ -291,6 +347,31 @@ export default function EventModal({
               placeholder="Location"
             />
           </div>
+          {pushCalendars.length > 0 && (
+            <div>
+              <p className="block text-sm font-medium text-skydark-text mb-2">Also add to</p>
+              <div className="space-y-2">
+                {pushCalendars.map((cal) => {
+                  const checked = (selectedPushTargets ?? pushCalendars.map((item) => item.entity_id)).includes(
+                    cal.entity_id
+                  );
+                  return (
+                    <label key={cal.entity_id} className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-sm text-skydark-text min-w-0 truncate">{cal.name}</span>
+                      <Toggle
+                        checked={checked}
+                        onChange={() => togglePushTarget(cal.entity_id)}
+                        aria-label={`Sync to ${cal.name}`}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-skydark-text-secondary mt-1">
+                Turn these off to keep the event only in SkyDark.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-skydark-text mb-1">Description</label>
             <textarea
@@ -311,7 +392,7 @@ export default function EventModal({
                 onDelete(event.id);
                 onClose();
               }}
-              className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 transition-colors"
+              className="btn-danger-outline w-full"
             >
               Delete
             </button>

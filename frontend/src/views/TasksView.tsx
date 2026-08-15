@@ -219,7 +219,7 @@ export default function TasksView() {
               <select
                 value={viewFilter}
                 onChange={(e) => setViewFilter(e.target.value as ViewFilterId)}
-                className="input-skydark py-1.5 text-sm min-w-[100px]"
+                className="input-skydark !w-auto py-1.5 text-sm min-w-[100px]"
                 aria-label="Filter by frequency"
               >
                 <option value="all">All</option>
@@ -240,14 +240,14 @@ export default function TasksView() {
         </div>
       </div>
 
-      <div className="flex gap-0 border-b border-gray-200 mb-4">
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 mb-4 w-fit max-w-full">
         <button
           type="button"
           onClick={() => setActiveTab("byPerson")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          className={`btn-segment ${
             activeTab === "byPerson"
-              ? "text-skydark-accent border-b-2 border-skydark-accent bg-[rgba(59,155,191,0.06)]"
-              : "text-skydark-text-secondary hover:text-skydark-text hover:bg-gray-50"
+              ? "bg-white text-skydark-text shadow-sm"
+              : "text-skydark-text-secondary hover:text-skydark-text"
           }`}
         >
           By person
@@ -255,10 +255,10 @@ export default function TasksView() {
         <button
           type="button"
           onClick={() => setActiveTab("allChores")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          className={`btn-segment ${
             activeTab === "allChores"
-              ? "text-skydark-accent border-b-2 border-skydark-accent bg-[rgba(59,155,191,0.06)]"
-              : "text-skydark-text-secondary hover:text-skydark-text hover:bg-gray-50"
+              ? "bg-white text-skydark-text shadow-sm"
+              : "text-skydark-text-secondary hover:text-skydark-text"
           }`}
         >
           All chores
@@ -364,7 +364,7 @@ export default function TasksView() {
                           <button
                             type="button"
                             onClick={() => handleToggle(task.id)}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center border-2 transition-colors"
+                            className="w-11 h-11 rounded-xl flex items-center justify-center border-2 transition-colors"
                             style={{
                               borderColor: member?.color ?? "#ccc",
                               backgroundColor: completedToday ? "#9EE5CC" : "white",
@@ -376,14 +376,14 @@ export default function TasksView() {
                           <button
                             type="button"
                             onClick={() => requestOpenTaskModal({ edit: task })}
-                            className="px-2 py-1.5 rounded-lg text-sm text-skydark-text-secondary hover:bg-gray-100"
+                            className="btn-ghost"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => requestDeleteTask(task.id)}
-                            className="px-2 py-1.5 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                            className="btn-ghost text-red-600 hover:bg-red-50 hover:text-red-600"
                           >
                             Delete
                           </button>

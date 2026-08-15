@@ -38,6 +38,11 @@ add_event:
       name: Location
       selector:
         text:
+    sync_push_targets:
+      name: Sync to calendars
+      description: Home Assistant calendar entity IDs to export this event to (JSON list). Empty list keeps the event in SkyDark only. Omit to use every export-enabled calendar.
+      selector:
+        text:
 
 complete_task:
   name: Complete task
@@ -522,3 +527,20 @@ delete_family_member:
       required: true
       selector:
         text:
+
+sync_calendars:
+  name: Sync calendars
+  description: Run two-way sync with linked Home Assistant calendars now.
+  fields:
+    entity_id:
+      name: Calendar entity
+      description: Optional. Sync only this calendar entity.
+      selector:
+        entity:
+          domain: calendar
+    import_existing:
+      name: Import existing events
+      description: Use a two-year window to import history from linked calendars.
+      default: false
+      selector:
+        boolean:

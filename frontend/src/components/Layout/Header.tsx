@@ -73,7 +73,7 @@ export default function Header({
             <button
               type="button"
               onClick={() => setShowUnlockPrompt(true)}
-              className="p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-skydark-accent"
+              className="btn-icon"
               aria-label="Unlock (enter PIN)"
             >
               <LockIcon className="w-6 h-6 text-red-500" />
@@ -82,7 +82,7 @@ export default function Header({
             <button
               type="button"
               onClick={() => setIsLocked(true)}
-              className="p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-skydark-accent"
+              className="btn-icon"
               aria-label="Lock"
             >
               <UnlockIcon className="w-6 h-6 text-green-500" />

@@ -48,28 +48,32 @@ export default function TaskItem({ task, color, onToggle, onEdit, onDelete }: Ta
       <button
         type="button"
         onClick={onToggle}
-        className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors"
-        style={{
-          borderColor: color,
-          backgroundColor: completed ? "#9EE5CC" : "white",
-        }}
+        className="btn-check"
         aria-label={completed ? "Mark incomplete" : "Mark complete"}
       >
-        {completed && (
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.2 }}
-            className="text-white text-sm font-bold"
-          >
-            ✓
-          </motion.span>
-        )}
+        <span
+          className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors"
+          style={{
+            borderColor: color,
+            backgroundColor: completed ? "#9EE5CC" : "white",
+          }}
+        >
+          {completed && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="text-white text-sm font-bold"
+            >
+              ✓
+            </motion.span>
+          )}
+        </span>
       </button>
       <button
         type="button"
         onClick={() => onEdit?.(task)}
-        className="min-w-0 flex-1 text-left"
+        className="min-w-0 flex-1 flex flex-col text-left items-start py-1"
       >
         <div className="min-w-0">
           <span
@@ -102,7 +106,7 @@ export default function TaskItem({ task, color, onToggle, onEdit, onDelete }: Ta
             e.stopPropagation();
             onDelete(task.id);
           }}
-          className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-skydark-text-secondary hover:bg-red-50 hover:text-red-600 transition-colors"
+          className="btn-icon flex-shrink-0 hover:bg-red-50 hover:text-red-600"
           aria-label="Delete task"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>

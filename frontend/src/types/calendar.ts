@@ -10,6 +10,8 @@ export interface CalendarEvent {
   recurrence_rule?: string;
   external_id?: string;
   external_source?: string;
+  /** Undefined = all export calendars. Empty = SkyDark only. */
+  sync_push_targets?: string[];
 }
 
 export interface FamilyMember {
