@@ -35,11 +35,11 @@ interface SettingsSidebarProps {
 export default function SettingsSidebar({ activeId, onSelect }: SettingsSidebarProps) {
   return (
     <aside
-      className="flex-shrink-0 w-40 sm:w-52 border-r border-gray-200 bg-white/80 py-6 pl-3 sm:pl-4 pr-2"
+      className="flex-shrink-0 w-full md:w-44 border-b md:border-b-0 md:border-r border-gray-200 bg-white/80 p-2 md:py-6"
       aria-label="Settings navigation"
     >
       <h2 className="text-base font-semibold text-skydark-text mb-1 text-left">Settings</h2>
-      <nav className="mt-4 flex flex-col gap-0.5 items-start w-full" aria-label="Settings sections">
+      <nav className="mt-2 flex md:flex-col gap-1 items-start w-full overflow-x-auto" aria-label="Settings sections">
         {navItems.map(({ id, label, Icon }) => {
           const isActive = activeId === id;
           return (
@@ -48,7 +48,7 @@ export default function SettingsSidebar({ activeId, onSelect }: SettingsSidebarP
               type="button"
               onClick={() => onSelect(id)}
               className={`
-                flex items-center gap-3 w-full rounded-lg py-2.5 pl-3 pr-3 text-left text-sm font-medium transition-colors justify-start
+                flex items-center gap-2 shrink-0 md:w-full min-h-11 rounded-lg py-2.5 pl-3 pr-3 text-left text-sm font-medium transition-colors justify-start
                 ${isActive
                   ? "bg-skydark-accent-bg text-skydark-accent"
                   : "text-skydark-text-secondary hover:bg-gray-100 hover:text-skydark-text"}

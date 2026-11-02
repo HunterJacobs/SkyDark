@@ -160,8 +160,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
         return
     pull = list(cfg.get(CONF_PULL_CALENDARS) or [])
     push = list(cfg.get(CONF_PUSH_CALENDARS) or [])
-    if pull or push:
-        await sync.apply_config_links(pull, push, bool(cfg.get(CONF_IMPORT_EXISTING, False)))
+    await sync.apply_config_links(pull, push, bool(cfg.get(CONF_IMPORT_EXISTING, False)))
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

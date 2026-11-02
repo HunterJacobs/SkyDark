@@ -135,7 +135,7 @@ export default function SettingsView() {
 
   if (requireUnlockToChangeSettings) {
     return (
-      <div className="h-full flex bg-skydark-bg items-center justify-center p-4">
+      <div className="h-full flex flex-col md:flex-row bg-skydark-bg items-center justify-center p-4">
         <PinPrompt
           open
           onClose={() => navigate(-1)}
@@ -148,7 +148,7 @@ export default function SettingsView() {
   }
 
   return (
-    <div className="h-full flex bg-skydark-bg">
+    <div className="h-full flex flex-col md:flex-row bg-skydark-bg">
       <SettingsSidebar activeId={activeSection} onSelect={setActiveSection} />
 
       <div className="flex-1 min-w-0 py-4 sm:py-6 px-4 sm:px-8 overflow-auto">

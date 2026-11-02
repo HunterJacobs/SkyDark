@@ -247,14 +247,14 @@ export default function MainLayout({ children }: MainLayoutProps) {
   return (
     <div
       className={`flex bg-skydark-bg font-sans text-skydark-text max-w-full ${
-        isCalendar ? "h-screen overflow-hidden" : "min-h-screen"
+        isCalendar ? "h-[100dvh] overflow-hidden" : "min-h-[100dvh]"
       }`}
     >
       <Sidebar />
       <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
         <Header />
         <main
-          className={`flex-1 p-5 sm:p-6 min-h-0 pb-24 md:pb-6 ${
+          className={`flex-1 p-3 sm:p-6 min-h-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-6 ${
             isCalendar ? "overflow-hidden" : "overflow-auto"
           }`}
         >

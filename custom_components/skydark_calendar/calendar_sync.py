@@ -11,7 +11,8 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+from datetime import date, datetime, timedelta, timezone
 from functools import partial
 from typing import Any
 
@@ -63,11 +64,18 @@ def event_content_hash(
     description: str | None,
     location: str | None,
 ) -> str:
+    def canonical(value: str | None) -> str:
+        if not value:
+            return ""
+        if all_day:
+            return str(value)[:10]
+        return _parse_stored_datetime(value).isoformat()
+
     payload = "|".join(
         [
             (title or "").strip(),
-            start or "",
-            end or "",
+            canonical(start),
+            canonical(end),
             "1" if all_day else "0",
             strip_marker(description),
             (location or "").strip(),
@@ -106,7 +114,7 @@ def _parse_stored_datetime(value: Any) -> datetime:
     if parsed is None:
         parsed = datetime.fromisoformat(text)
     if parsed.tzinfo is None:
-        parsed = dt_util.as_local(parsed)
+        parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
     return dt_util.as_utc(parsed)
 
 
@@ -134,7 +142,7 @@ def _ha_dt_parts(value: Any) -> tuple[datetime, bool]:
         return datetime(day.year, day.month, day.day, tzinfo=timezone.utc), True
     parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = dt_util.as_local(parsed)
+        parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
     return dt_util.as_utc(parsed), False
 
 
@@ -185,8 +193,8 @@ def list_ha_calendars(hass: HomeAssistant) -> list[dict[str, Any]]:
             {
                 "entity_id": state.entity_id,
                 "name": state.attributes.get("friendly_name") or state.entity_id,
-                "can_create": bool(features & create_bit) if features else True,
-                "can_delete": bool(features & delete_bit) if features else True,
+                "can_create": bool(features & create_bit),
+                "can_delete": bool(features & delete_bit),
                 "features_known": bool(features),
             }
         )
@@ -245,6 +253,13 @@ class SkydarkCalendarSync:
         pull_ids = [eid for eid in pull_ids if eid in calendars]
         push_ids = [eid for eid in push_ids if eid in calendars]
         entity_ids = sorted(set(pull_ids) | set(push_ids))
+        existing = await self.hass.async_add_executor_job(self.db.get_sync_links)
+        for old in existing:
+            if old["entity_id"] not in entity_ids:
+                await self.hass.async_add_executor_job(partial(
+                    self.db.upsert_sync_link, entity_id=old["entity_id"],
+                    pull_enabled=False, push_enabled=False, import_existing=False,
+                ))
         for entity_id in entity_ids:
             info = calendars.get(entity_id) or {"name": entity_id}
             await self.hass.async_add_executor_job(
@@ -274,23 +289,26 @@ class SkydarkCalendarSync:
                     if item.get("error"):
                         summary["ok"] = False
                 self.last_run = dt_util.utcnow().isoformat()
+                self.hass.bus.async_fire(f"{DOMAIN}_updated")
                 return summary
             finally:
                 self._applying = False
 
     async def async_handle_local_delete(self, event_id: str) -> None:
-        maps = await self.hass.async_add_executor_job(self.db.get_sync_maps_for_event, event_id)
-        links = {link["id"]: link for link in await self.hass.async_add_executor_job(self.db.get_sync_links)}
-        for mapped in maps:
-            link = links.get(mapped["link_id"])
-            if not link:
-                continue
-            if link.get("push_enabled"):
-                await self._delete_remote(link["entity_id"], mapped["remote_uid"])
-            else:
-                await self.hass.async_add_executor_job(
-                    self.db.add_tombstone, mapped["link_id"], mapped["remote_uid"]
-                )
+        async with self._lock:
+            maps = await self.hass.async_add_executor_job(self.db.get_sync_maps_for_event, event_id)
+            links = {link["id"]: link for link in await self.hass.async_add_executor_job(self.db.get_sync_links)}
+            for mapped in maps:
+                link = links.get(mapped["link_id"])
+                if not link:
+                    continue
+                if link.get("push_enabled"):
+                    await self._delete_remote(link["entity_id"], mapped["remote_uid"])
+                else:
+                    await self.hass.async_add_executor_job(
+                        self.db.add_tombstone, mapped["link_id"], mapped["remote_uid"]
+                    )
+            await self.hass.async_add_executor_job(self.db.delete_event, event_id)
 
     async def _sync_link(self, link: dict[str, Any], *, import_all: bool) -> dict[str, Any]:
         entity_id = link["entity_id"]
@@ -318,37 +336,21 @@ class SkydarkCalendarSync:
         return now - timedelta(days=60), now + timedelta(days=400)
 
     async def _fetch_remote_events(self, entity_id: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
-        if not self.hass.services.has_service("calendar", "get_events"):
-            raise RuntimeError("calendar.get_events is not available")
-        try:
-            response = await self.hass.services.async_call(
-                "calendar",
-                "get_events",
-                {
-                    "start_date_time": dt_util.as_local(start).strftime("%Y-%m-%d %H:%M:%S"),
-                    "end_date_time": dt_util.as_local(end).strftime("%Y-%m-%d %H:%M:%S"),
-                },
-                target={"entity_id": entity_id},
-                blocking=True,
-                return_response=True,
-            )
-        except Exception:
-            response = await self.hass.services.async_call(
-                "calendar",
-                "get_events",
-                {
-                    "entity_id": entity_id,
-                    "start_date_time": dt_util.as_local(start).strftime("%Y-%m-%d %H:%M:%S"),
-                    "end_date_time": dt_util.as_local(end).strftime("%Y-%m-%d %H:%M:%S"),
-                },
-                blocking=True,
-                return_response=True,
-            )
-        if not response:
-            return []
-        block = response.get(entity_id) or next(iter(response.values()), {})
-        events = block.get("events") if isinstance(block, dict) else None
-        return list(events or [])
+        # Entity API preserves UID/recurrence_id, unlike calendar.get_events responses.
+        entity = self._entity(entity_id)
+        events = await entity.async_get_events(self.hass, dt_util.as_local(start), dt_util.as_local(end))
+        if not isinstance(events, list):
+            raise RuntimeError("Calendar returned an invalid event response; nothing was deleted")
+        return [asdict(event) for event in events]
+
+    def _entity(self, entity_id: str):
+        from homeassistant.components.calendar.const import DATA_COMPONENT
+        component = self.hass.data.get(DATA_COMPONENT)
+        entity = component.get_entity(entity_id) if component else None
+        state = self.hass.states.get(entity_id)
+        if not entity or not state or state.state in ("unavailable", "unknown"):
+            raise RuntimeError(f"Calendar {entity_id} is unavailable")
+        return entity
 
     async def _pull_link(self, link: dict[str, Any], *, import_all: bool) -> int:
         start, end = self._window(import_all)
@@ -393,7 +395,11 @@ class SkydarkCalendarSync:
                     remote_changed = remote_hash != last_hash
                     local_changed = local_hash != last_hash
                     stored_hash = last_hash
-                    if remote_changed and not local_changed:
+                    if remote_hash == local_hash:
+                        stored_hash = remote_hash
+                    elif remote_changed and local_changed:
+                        raise RuntimeError(f"Event changed in both calendars: {local.get('title', 'Untitled')}. Resolve the conflicting edits before syncing.")
+                    elif remote_changed and not local_changed:
                         await self.hass.async_add_executor_job(
                             partial(
                                 self.db.update_event,
@@ -461,7 +467,14 @@ class SkydarkCalendarSync:
                 continue
             if mapped.get("origin") != "remote":
                 continue
-            await self.hass.async_add_executor_job(self.db.delete_event, mapped["skydark_event_id"])
+            local = await self.hass.async_add_executor_job(self.db.get_event, mapped["skydark_event_id"])
+            if not local:
+                continue
+            local_start = _parse_stored_datetime(local["start_time"])
+            local_end = _parse_stored_datetime(local.get("end_time") or local["start_time"])
+            # Absence is meaningful only within the window actually fetched.
+            if local_start < end and local_end > start:
+                await self.hass.async_add_executor_job(self.db.delete_event, mapped["skydark_event_id"])
         return pulled
 
     def _should_push_event(self, event: dict[str, Any], entity_id: str) -> bool:
@@ -474,6 +487,17 @@ class SkydarkCalendarSync:
         start, end = self._window(False)
         events = await self.hass.async_add_executor_job(self.db.get_events, start, end)
         maps = await self.hass.async_add_executor_job(self.db.get_sync_maps, link["id"])
+        if any(item["remote_uid"].startswith("pending::") for item in maps):
+            remotes = await self._fetch_remote_events(link["entity_id"], start, end)
+            by_marker = {extract_marker_id(r.get("description")): remote_uid_of(r) for r in remotes}
+            for mapped in maps:
+                uid = by_marker.get(mapped["skydark_event_id"])
+                if mapped["remote_uid"].startswith("pending::") and uid:
+                    mapped["remote_uid"] = uid
+                    await self.hass.async_add_executor_job(partial(
+                        self.db.upsert_sync_map, link["id"], mapped["skydark_event_id"],
+                        uid, mapped["origin"], mapped["last_hash"],
+                    ))
         by_event = {item["skydark_event_id"]: item for item in maps}
         pushed = 0
         for event in events:
@@ -494,12 +518,12 @@ class SkydarkCalendarSync:
             mapped = by_event.get(event["id"])
             if mapped and mapped.get("last_hash") == local_hash:
                 continue
-            if mapped and mapped.get("remote_uid"):
-                await self._delete_remote(link["entity_id"], mapped["remote_uid"])
-            uid = await self._create_remote(link["entity_id"], event)
-            remote_uid = uid or mapped["remote_uid"] if mapped else f"pending::{event['id']}"
-            if uid:
-                remote_uid = uid
+            if mapped:
+                remote_uid = mapped["remote_uid"]
+                await self._update_remote(link["entity_id"], remote_uid, event)
+            else:
+                await self._create_remote(link["entity_id"], event)
+                remote_uid = f"pending::{event['id']}"
             await self.hass.async_add_executor_job(
                 partial(
                     self.db.upsert_sync_map,
@@ -513,72 +537,45 @@ class SkydarkCalendarSync:
             pushed += 1
         return pushed
 
-    async def _create_remote(self, entity_id: str, event: dict[str, Any]) -> str | None:
-        if not self.hass.services.has_service("calendar", "create_event"):
-            raise RuntimeError("calendar.create_event is not available")
-        start = _parse_stored_datetime(event["start_time"])
-        end = _parse_stored_datetime(event.get("end_time") or event["start_time"])
-        data: dict[str, Any] = {
+    def _event_payload(self, event: dict[str, Any]) -> dict[str, Any]:
+        if event.get("all_day"):
+            start = date.fromisoformat(str(event["start_time"])[:10])
+            end = date.fromisoformat(str(event.get("end_time") or event["start_time"])[:10]) + timedelta(days=1)
+        else:
+            start = _parse_stored_datetime(event["start_time"])
+            end = _parse_stored_datetime(event["end_time"]) if event.get("end_time") else start + timedelta(hours=1)
+        if end <= start:
+            raise ValueError("Event end must be after its start")
+        return {
             "summary": event.get("title") or "Untitled",
             "description": description_with_marker(event.get("description"), event["id"]),
+            "location": event.get("location") or "",
+            "start": start, "end": end,
         }
-        if event.get("location"):
-            data["location"] = event["location"]
-        if event.get("all_day"):
-            start_d = start.date()
-            end_d = end.date()
-            if end_d <= start_d:
-                end_d = start_d + timedelta(days=1)
-            else:
-                end_d = end_d + timedelta(days=1)
-            data["start_date"] = start_d.isoformat()
-            data["end_date"] = end_d.isoformat()
-        else:
-            data["start_date_time"] = dt_util.as_local(dt_util.as_utc(start)).strftime("%Y-%m-%d %H:%M:%S")
-            data["end_date_time"] = dt_util.as_local(dt_util.as_utc(end)).strftime("%Y-%m-%d %H:%M:%S")
-        try:
-            response = await self.hass.services.async_call(
-                "calendar",
-                "create_event",
-                data,
-                target={"entity_id": entity_id},
-                blocking=True,
-                return_response=True,
-            )
-        except TypeError:
-            await self.hass.services.async_call(
-                "calendar",
-                "create_event",
-                data,
-                target={"entity_id": entity_id},
-                blocking=True,
-            )
-            return None
-        if not response:
-            return None
-        block = response.get(entity_id) if isinstance(response, dict) else None
-        if isinstance(block, dict):
-            uid = block.get("uid") or (block.get("event") or {}).get("uid")
-            if uid:
-                return str(uid)
-        return None
+
+    async def _create_remote(self, entity_id: str, event: dict[str, Any]) -> None:
+        from homeassistant.components.calendar import CalendarEntityFeature
+        entity = self._entity(entity_id)
+        if not (entity.supported_features or 0) & CalendarEntityFeature.CREATE_EVENT:
+            raise RuntimeError("This calendar does not support creating events")
+        await entity.async_create_event(**self._event_payload(event))
+
+    async def _update_remote(self, entity_id: str, remote_uid: str, event: dict[str, Any]) -> None:
+        from homeassistant.components.calendar import CalendarEntityFeature
+        if remote_uid.startswith(("pending::", "fallback::")):
+            raise RuntimeError("Waiting for the calendar to return a stable event ID; update will retry")
+        entity = self._entity(entity_id)
+        if not (entity.supported_features or 0) & CalendarEntityFeature.UPDATE_EVENT:
+            raise RuntimeError("This calendar cannot update events; the original event was preserved")
+        uid, _, recurrence_id = remote_uid.partition("::")
+        await entity.async_update_event(uid, self._event_payload(event), recurrence_id=recurrence_id or None)
 
     async def _delete_remote(self, entity_id: str, remote_uid: str) -> None:
-        if not remote_uid or remote_uid.startswith("pending::") or remote_uid.startswith("fallback::"):
-            return
-        if not self.hass.services.has_service("calendar", "delete_event"):
-            return
-        uid, _, rec = remote_uid.partition("::")
-        payload: dict[str, Any] = {"uid": uid}
-        if rec:
-            payload["recurrence_id"] = rec
-        try:
-            await self.hass.services.async_call(
-                "calendar",
-                "delete_event",
-                payload,
-                target={"entity_id": entity_id},
-                blocking=True,
-            )
-        except Exception:
-            _LOGGER.warning("Could not delete remote event %s on %s", remote_uid, entity_id)
+        from homeassistant.components.calendar import CalendarEntityFeature
+        if not remote_uid or remote_uid.startswith(("pending::", "fallback::")):
+            raise RuntimeError("Cannot delete until the calendar returns a stable event ID; try syncing first")
+        entity = self._entity(entity_id)
+        if not (entity.supported_features or 0) & CalendarEntityFeature.DELETE_EVENT:
+            raise RuntimeError("This calendar does not support deleting events")
+        uid, _, recurrence_id = remote_uid.partition("::")
+        await entity.async_delete_event(uid, recurrence_id=recurrence_id or None)

@@ -3,7 +3,7 @@
  * with loading/error state and retry. Used by views and AppContext to sync from backend.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getHAConnection } from "../lib/haConnection";
 import type { Connection } from "home-assistant-js-websocket";
 import {
@@ -68,18 +68,24 @@ export function useSkydarkData(): {
   refetchMeals: (startDate?: string, endDate?: string) => Promise<void>;
 } {
   const [data, setData] = useState<SkydarkDataState>(initialState);
+  const eventRange = useRef(defaultLoadRange());
+  const mealRange = useRef(defaultLoadRange());
+  const eventRequest = useRef(0);
+  const mealRequest = useRef(0);
 
   const load = useCallback(
     async (conn: Connection, startDate?: string, endDate?: string) => {
-      const range = defaultLoadRange();
+      const range = eventRange.current;
       const start = startDate ?? range.start;
       const end = endDate ?? range.end;
+      const eventVersion = ++eventRequest.current;
+      const mealVersion = ++mealRequest.current;
       const [eventsRes, tasksRes, listsRes, mealsRes, familyRes, configRes, pointsRes, rewardsRes, recipesRes] =
         await Promise.all([
           fetchEvents(conn, start, end),
           fetchTasks(conn),
           fetchLists(conn),
-          fetchMeals(conn, start, end),
+          fetchMeals(conn, mealRange.current.start.slice(0,10), mealRange.current.end.slice(0,10)),
           fetchFamilyMembers(conn),
           fetchConfig(conn),
           fetchPoints(conn),
@@ -99,11 +105,11 @@ export function useSkydarkData(): {
       setData((prev) => ({
         ...prev,
         connection: conn,
-        events,
+        events: eventVersion === eventRequest.current ? events : prev.events,
         tasks: tasksRes.tasks ?? [],
         lists: listsRes.lists ?? [],
         listItems,
-        meals: mealsRes.meals ?? [],
+        meals: mealVersion === mealRequest.current ? mealsRes.meals ?? [] : prev.meals,
         recipes: recipesRes.recipes ?? [],
         familyMembers: Array.isArray(familyRes.family_members) ? familyRes.family_members : [],
         config,
@@ -117,7 +123,7 @@ export function useSkydarkData(): {
   );
 
   const refetch = useCallback(async () => {
-    setData((prev) => ({ ...prev, loading: true, error: null }));
+    setData((prev) => ({ ...prev, loading: !prev.connection, error: null }));
     try {
       const conn = await getHAConnection();
       await load(conn);
@@ -136,12 +142,14 @@ export function useSkydarkData(): {
       const conn = data.connection;
       if (!conn) return;
       try {
-        const range = defaultLoadRange();
+        const range = eventRange.current;
         const start = startDate ?? range.start;
         const end = endDate ?? range.end;
+        eventRange.current = { start, end };
+        const request = ++eventRequest.current;
         const res = await fetchEvents(conn, start, end);
         const events = (res.events ?? []).map((e: SkydarkEvent) => eventToCalendarEvent(e));
-        setData((prev) => ({ ...prev, events }));
+        if (request === eventRequest.current) setData((prev) => ({ ...prev, events }));
       } catch {
         // keep previous events on partial failure
       }
@@ -154,11 +162,13 @@ export function useSkydarkData(): {
       const conn = data.connection;
       if (!conn) return;
       try {
-        const range = defaultLoadRange();
+        const range = mealRange.current;
         const start = startDate ?? range.start;
         const end = endDate ?? range.end;
-        const res = await fetchMeals(conn, start, end);
-        setData((prev) => ({ ...prev, meals: res.meals ?? [] }));
+        mealRange.current = { start, end };
+        const request = ++mealRequest.current;
+        const res = await fetchMeals(conn, start.slice(0,10), end.slice(0,10));
+        if (request === mealRequest.current) setData((prev) => ({ ...prev, meals: res.meals ?? [] }));
       } catch {
         // keep previous meals
       }
@@ -169,7 +179,7 @@ export function useSkydarkData(): {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setData((prev) => ({ ...prev, loading: true, error: null }));
+      setData((prev) => ({ ...prev, loading: !prev.connection, error: null }));
       try {
         const conn = await getHAConnection();
         if (cancelled) return;
@@ -188,6 +198,32 @@ export function useSkydarkData(): {
       cancelled = true;
     };
   }, [load]);
+
+  useEffect(() => {
+    const conn = data.connection;
+    if (!conn) return;
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      if (disposed || document.hidden) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void refetch(), 150);
+    };
+    if (typeof conn.subscribeEvents === "function") {
+      conn.subscribeEvents(refresh, "skydark_calendar_updated").then(unsub => {
+        if (disposed) unsub(); else unsubscribe = unsub;
+      }).catch(() => { /* polling below provides a fallback */ });
+    }
+    conn.addEventListener("ready", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const interval = setInterval(refresh, 60_000);
+    return () => {
+      disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe?.();
+      conn.removeEventListener("ready", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [data.connection, refetch]);
 
   return { data, refetch, refetchEvents, refetchMeals };
 }

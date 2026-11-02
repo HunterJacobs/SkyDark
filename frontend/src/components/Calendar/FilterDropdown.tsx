@@ -21,8 +21,6 @@ interface FilterDropdownProps {
 
 export default function FilterDropdown({
   familyMembers,
-  tasksProgress = true,
-  onTasksProgressChange,
   eventsSelectAll = true,
   onEventsSelectAllChange,
   memberVisibility = {},
@@ -64,19 +62,9 @@ export default function FilterDropdown({
       </button>
       {open && (
         <div
-          className="absolute top-full right-0 mt-1 py-3 bg-white rounded-2xl shadow-skydark-modal border border-gray-100 z-50 min-w-[280px]"
-          role="menu"
+          className="fixed left-3 right-3 top-36 sm:absolute sm:top-full sm:left-auto sm:right-0 mt-1 py-3 bg-white rounded-2xl shadow-skydark-modal border border-gray-100 z-50 min-w-[280px]"
+          role="group" aria-label="Calendar filters"
         >
-          <div className="px-4 pb-2 border-b border-gray-100">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium text-skydark-text">Tasks progress</span>
-              <Toggle
-                checked={tasksProgress}
-                onChange={(v) => onTasksProgressChange?.(v)}
-                aria-label="Show tasks progress"
-              />
-            </div>
-          </div>
           <div className="px-4 pt-3">
             <div className="text-sm font-semibold text-skydark-text mb-2">Events</div>
             <div className="flex items-center justify-between gap-4 mb-3">

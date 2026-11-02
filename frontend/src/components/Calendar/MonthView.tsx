@@ -59,7 +59,7 @@ export default function MonthView({
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+    <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-auto min-h-0">
       {weekDays.map((wd) => (
         <div
           key={wd}
@@ -77,12 +77,13 @@ export default function MonthView({
         return (
           <div
             key={d.toISOString()}
-            className="bg-skydark-bg min-h-[100px] p-1 flex flex-col"
+            className="bg-skydark-bg min-w-0 min-h-[100px] p-1 flex flex-col"
           >
             <button
               type="button"
               onClick={() => onDateClick?.(d)}
-              className={`text-left text-sm w-6 h-6 rounded-full flex items-center justify-center mb-1 ${
+              aria-label={format(d, "EEEE, MMMM d, yyyy")}
+              className={`text-left text-sm w-11 h-11 rounded-full flex items-center justify-center mb-1 ${
                 !isCurrentMonth ? "text-gray-400" : "text-skydark-text"
               } ${isToday(d) ? "bg-red-100 text-red-700 font-semibold" : ""}`}
             >

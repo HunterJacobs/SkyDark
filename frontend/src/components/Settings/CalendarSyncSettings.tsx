@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import Toggle from "../Common/Toggle";
 import { useSkydarkDataContext } from "../../contexts/SkydarkDataContext";
 import {
-  deleteSyncLink,
   fetchSyncStatus,
   saveSyncLink,
   syncCalendarsNow,
@@ -66,18 +65,15 @@ export default function CalendarSyncSettings() {
     setError(null);
     setMessage(null);
     try {
-      if (!nextPull && !nextPush && !patch.import_existing) {
-        if (existing) await deleteSyncLink(conn, cal.entity_id);
-      } else {
-        await saveSyncLink(conn, {
+        const saved = await saveSyncLink(conn, {
           entity_id: cal.entity_id,
           name: cal.name,
           pull_enabled: nextPull,
           push_enabled: nextPush,
           import_existing: patch.import_existing,
         });
-      }
       await reload();
+      if (saved.sync && !saved.sync.ok) throw new Error(saved.sync.links.filter(l => l.error).map(l => `${l.entity_id}: ${l.error}`).join("; "));
       await skydark?.refetchEvents();
       if (patch.import_existing) setMessage(`Imported existing events from ${cal.name}.`);
     } catch (err) {
@@ -93,10 +89,11 @@ export default function CalendarSyncSettings() {
     setError(null);
     setMessage(null);
     try {
-      await syncCalendarsNow(conn, { entity_id: entityId, import_existing: importExisting });
+      const summary = await syncCalendarsNow(conn, { entity_id: entityId, import_existing: importExisting });
       await reload();
       await skydark?.refetchEvents();
-      setMessage(importExisting ? "Import finished." : "Sync finished.");
+      if (!summary.ok) throw new Error(summary.links.filter(l => l.error).map(l => `${l.entity_id}: ${l.error}`).join("; "));
+      setMessage(`Sync finished: ${summary.links.reduce((n,l) => n + (l.pulled ?? 0), 0)} imported, ${summary.links.reduce((n,l) => n + (l.pushed ?? 0), 0)} exported.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed.");
     } finally {
@@ -119,6 +116,7 @@ export default function CalendarSyncSettings() {
         (Settings → Devices &amp; services). Then choose what SkyDark should import and
         what it should send back.
       </p>
+      <p className="text-sm text-skydark-text-secondary">Sync runs every 15 minutes. Tap an event and Edit to change its time on touchscreens. Imported events stay local unless selected for export.</p>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -128,12 +126,13 @@ export default function CalendarSyncSettings() {
         >
           {busyId === "all" ? "Syncing…" : "Sync now"}
         </button>
+        <button className="btn-secondary" disabled={loading || busyId !== null} onClick={() => void reload()}>Refresh calendars</button>
         <span className="text-sm text-skydark-text-secondary">
-          Last sync: {formatSynced(lastRun)}
+          Last attempt: {formatSynced(lastRun)}
         </span>
       </div>
-      {message && <p className="text-sm text-green-700">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p role="status" className="text-sm text-green-700">{message}</p>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {loading && calendars.length === 0 ? (
         <p className="text-sm text-skydark-text-secondary">Loading calendars…</p>
       ) : calendars.length === 0 ? (
@@ -147,7 +146,7 @@ export default function CalendarSyncSettings() {
             const link = linkByEntity.get(cal.entity_id);
             const pull = isOn(link?.pull_enabled);
             const push = isOn(link?.push_enabled);
-            const busy = busyId === cal.entity_id;
+            const busy = busyId !== null || loading;
             return (
               <li
                 key={cal.entity_id}

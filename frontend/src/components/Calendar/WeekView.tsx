@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 import {
   format,
   startOfWeek,
@@ -90,17 +90,6 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
     return () => window.clearInterval(timerId);
   }, []);
 
-  // Auto-update scroll position every minute to keep current time centered (only if today is in view)
-  useEffect(() => {
-    if (!weekContainsToday) return;
-    const el = scrollRef.current;
-    const dayHeight = fullDayHeightRef.current;
-    if (!el || dayHeight <= 0) return;
-    
-    const pph = dayHeight / 24;
-    const offset = getInitialScrollTopForFourHourWindow(now, pph);
-    el.scrollTop = normalizeScrollToMiddleBlock(offset, dayHeight);
-  }, [now, weekContainsToday]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -169,7 +158,7 @@ const WeekView = forwardRef<WeekViewRef, WeekViewProps>(function WeekView(
   );
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true, delayTouchStart: 250, touchSlop: 12 }}>
       <div className="flex flex-1 min-h-0 flex-col">
         {/* Row 1: day headers */}
         <div

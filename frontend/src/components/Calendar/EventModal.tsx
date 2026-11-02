@@ -19,6 +19,8 @@ interface EventModalProps {
   familyMembers: FamilyMember[];
   onSave: (data: Partial<CalendarEvent> & { id?: string }) => void;
   onDelete?: (eventId: string) => void;
+  saving?: boolean;
+  error?: string | null;
 }
 
 export default function EventModal({
@@ -28,7 +30,10 @@ export default function EventModal({
   familyMembers,
   onSave,
   onDelete,
+  saving = false,
+  error,
 }: EventModalProps) {
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [mode, setMode] = useState<EventModalMode>("create");
   const [title, setTitle] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -37,9 +42,6 @@ export default function EventModal({
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [repeats, setRepeats] = useState(false);
-  const [countdown, setCountdown] = useState(false);
-  const [reminder, setReminder] = useState(false);
   const [addProfileModalOpen, setAddProfileModalOpen] = useState(false);
   const [pushCalendars, setPushCalendars] = useState<{ entity_id: string; name: string }[]>([]);
   const [selectedPushTargets, setSelectedPushTargets] = useState<string[] | null>(null);
@@ -47,6 +49,7 @@ export default function EventModal({
   const conn = useSkydarkDataContext()?.data?.connection ?? null;
 
   useEffect(() => {
+    setValidationError(null);
     if (open && event) setMode("view");
     else if (open && !event) setMode("create");
   }, [open, event]);
@@ -59,8 +62,8 @@ export default function EventModal({
           ? [event.calendar_id]
           : [];
       setTitle(event.title);
-      setStartTime(toDatetimeLocalValue(event.start_time));
-      setEndTime(toDatetimeLocalValue(event.end_time));
+      setStartTime(event.all_day ? event.start_time.slice(0,10) + "T00:00" : toDatetimeLocalValue(event.start_time));
+      setEndTime(event.all_day ? (event.end_time ?? event.start_time).slice(0,10) + "T23:59" : toDatetimeLocalValue(event.end_time));
       setAllDay(!!event.all_day);
       setSelectedProfileIds(ids);
       setDescription(event.description || "");
@@ -70,18 +73,15 @@ export default function EventModal({
       const now = new Date();
       const end = new Date(now.getTime() + 60 * 60 * 1000);
       setTitle("");
-      setStartTime(now.toISOString().slice(0, 16));
-      setEndTime(end.toISOString().slice(0, 16));
+      setStartTime(toDatetimeLocalValue(now.toISOString()));
+      setEndTime(toDatetimeLocalValue(end.toISOString()));
       setAllDay(false);
       setSelectedProfileIds(familyMembers.map((m) => m.id));
       setDescription("");
       setLocation("");
-      setRepeats(false);
-      setCountdown(false);
-      setReminder(false);
       setSelectedPushTargets(null);
     }
-  }, [event, open, familyMembers]);
+  }, [event, open]);
 
   useEffect(() => {
     if (!open || !conn) {
@@ -111,23 +111,24 @@ export default function EventModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+    if (saving) return;
+    if (!title.trim() || !startTime || (endTime && (allDay ? endTime.slice(0,10) < startTime.slice(0,10) : new Date(endTime) <= new Date(startTime)))) {
+      setValidationError("Enter a title, a start date, and an end time after the start."); return;
+    }
     const allIds = pushCalendars.map((cal) => cal.entity_id);
     const chosen = selectedPushTargets ?? allIds;
-    const allSelected =
-      selectedPushTargets == null ||
-      (allIds.length > 0 && chosen.length === allIds.length && allIds.every((id) => chosen.includes(id)));
     onSave({
       ...(event?.id && { id: event.id }),
-      title,
-      start_time: localDateTimeToISO(startTime),
-      end_time: endTime ? localDateTimeToISO(endTime) : undefined,
+      title: title.trim(),
+      start_time: allDay ? startTime.slice(0,10) + "T00:00:00+00:00" : localDateTimeToISO(startTime),
+      end_time: allDay ? (endTime || startTime).slice(0,10) + "T23:59:59+00:00" : endTime ? localDateTimeToISO(endTime) : undefined,
       all_day: allDay,
       calendar_id: selectedProfileIds.length > 0 ? selectedProfileIds : undefined,
       description: description || undefined,
       location: location || undefined,
-      sync_push_targets: allSelected ? undefined : chosen,
+      sync_push_targets: chosen,
     });
-    onClose();
   };
 
   const togglePushTarget = (entityId: string) => {
@@ -179,6 +180,7 @@ export default function EventModal({
         ) : undefined
       }
     >
+      {(error || validationError) && <p role="alert" className="p-3 mb-3 rounded-xl bg-red-50 text-red-700">{error || validationError}</p>}
       {isView ? (
         <div className="space-y-4">
           <div>
@@ -241,6 +243,7 @@ export default function EventModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="input-skydark"
+              aria-label="Event title"
               placeholder="Event title"
               required
             />
@@ -260,10 +263,14 @@ export default function EventModal({
                 onChange={(e) => {
                   const d = e.target.value;
                   setStartTime(d ? `${d}T00:00:00` : startTime);
-                  if (endTime) setEndTime(endTime.slice(0, 10) + "T23:59:59");
+                  setEndTime(d + "T23:59:59");
                 }}
                 className="input-skydark"
+                aria-label="Event date"
+                required
               />
+              <label className="block text-sm font-medium mt-3 mb-1">Last day</label>
+              <input type="date" aria-label="Event last day" required min={startTime.slice(0,10)} value={(endTime || startTime).slice(0,10)} onChange={e => setEndTime(e.target.value + "T23:59:59")} className="input-skydark" />
             </div>
           ) : (
             <>
@@ -271,6 +278,8 @@ export default function EventModal({
                 <label className="block text-sm font-medium text-skydark-text mb-1">Starts</label>
                 <input
                   type="datetime-local"
+                  required
+                  aria-label="Event starts"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   className="input-skydark"
@@ -280,6 +289,7 @@ export default function EventModal({
                 <label className="block text-sm font-medium text-skydark-text mb-1">Ends</label>
                 <input
                   type="datetime-local"
+                  aria-label="Event ends"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   className="input-skydark"
@@ -287,19 +297,6 @@ export default function EventModal({
               </div>
             </>
           )}
-
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm font-medium text-skydark-text">Repeats</span>
-            <Toggle checked={repeats} onChange={setRepeats} aria-label="Repeats" />
-          </div>
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm font-medium text-skydark-text">Countdown</span>
-            <Toggle checked={countdown} onChange={setCountdown} aria-label="Countdown" />
-          </div>
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm font-medium text-skydark-text">Reminder</span>
-            <Toggle checked={reminder} onChange={setReminder} aria-label="Reminder" />
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-skydark-text mb-2">Profiles</label>
@@ -389,9 +386,9 @@ export default function EventModal({
             <button
               type="button"
               onClick={() => {
-                onDelete(event.id);
-                onClose();
+                if (window.confirm("Delete this event? This also deletes linked exports when supported.")) onDelete(event.id);
               }}
+              disabled={saving}
               className="btn-danger-outline w-full"
             >
               Delete
@@ -399,9 +396,10 @@ export default function EventModal({
           )}
           <button
             type="submit"
+            disabled={saving}
             className="btn-primary w-full"
           >
-            {event ? "Save" : "Add"}
+            {saving ? "Saving…" : event ? "Save" : "Add"}
           </button>
         </div>
       </form>

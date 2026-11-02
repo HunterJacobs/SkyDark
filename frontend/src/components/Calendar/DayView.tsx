@@ -82,19 +82,7 @@ const DayView = forwardRef<DayViewRef, DayViewProps>(function DayView(
     return () => window.clearInterval(timerId);
   }, []);
 
-  // Auto-update scroll position every minute to keep current time centered (only if viewing today)
-  useEffect(() => {
-    if (!isToday) return;
-    const el = scrollRef.current;
-    const dayHeight = fullDayHeightRef.current;
-    if (!el || dayHeight <= 0) return;
 
-    const pph = dayHeight / 24;
-    const offset = getInitialScrollTopForFourHourWindow(now, pph);
-    el.scrollTop = normalizeScrollToMiddleBlock(offset, dayHeight);
-  }, [now, isToday]);
-
-  // ResizeObserver to measure container height for dynamic pixelsPerHour
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;

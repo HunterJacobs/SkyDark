@@ -16,6 +16,7 @@ export type SaveMealPayload = {
 interface MealModalProps {
   open: boolean;
   onClose: () => void;
+  error?: string | null;
   /** When adding to a slot. */
   slotForModal: { date: string; mealType: string } | null;
   /** When editing an existing slot. */
@@ -44,6 +45,7 @@ function filterRecipes(recipes: MealRecipe[], query: string): MealRecipe[] {
 export default function MealModal({
   open,
   onClose,
+  error,
   slotForModal,
   editSlot,
   viewRecipe,
@@ -153,16 +155,13 @@ export default function MealModal({
     };
     if (isViewRecipe && viewRecipe && onUpdateRecipe) {
       onUpdateRecipe(viewRecipe.id, payload);
-      onClose();
       return;
     }
     onSave(payload);
-    onClose();
   };
 
   const handleSelectRecipe = (recipe: MealRecipe) => {
     onAssignFromLibrary(recipe);
-    onClose();
   };
 
   const title = isViewRecipe
@@ -211,6 +210,7 @@ export default function MealModal({
         ) : undefined
       }
     >
+      {error && <p role="alert" className="p-3 mb-3 rounded-xl bg-red-50 text-red-700">{error}</p>}
       <div className="flex flex-col h-full">
         {showViewRecipe && viewRecipe && (
           <div className="flex flex-col h-full min-h-0">
@@ -308,8 +308,7 @@ export default function MealModal({
                 type="button"
                 onClick={() => {
                   onRemove(editSlot.id);
-                  onClose();
-                }}
+                            }}
                 className="mt-3 btn-danger-outline w-full shrink-0"
               >
                 Remove from this day
@@ -513,8 +512,7 @@ export default function MealModal({
                     type="button"
                     onClick={() => {
                       onRemoveFromLibrary(editSlot.recipeId!);
-                      onClose();
-                    }}
+                                    }}
                     className="btn-danger-outline w-full"
                   >
                     Delete from library
@@ -528,8 +526,7 @@ export default function MealModal({
                     type="button"
                     onClick={() => {
                       onRemoveFromLibrary(viewRecipe.id);
-                      onClose();
-                    }}
+                                    }}
                     className="btn-danger-outline w-full"
                   >
                     Delete from library
