@@ -6,6 +6,7 @@ import RewardModal from "../components/Common/RewardModal";
 import FloatingActionButton from "../components/Common/FloatingActionButton";
 import { serviceRedeemReward, serviceAddReward, serviceDeleteReward } from "../lib/skyDarkApi";
 import type { Reward } from "../types/rewards";
+import { avatarStyle } from "../lib/colors";
 
 const STORAGE_REWARDS = "skydark_rewards";
 const STORAGE_POINTS = "skydark_rewards_points";
@@ -182,8 +183,8 @@ export default function RewardsView() {
                 className="flex items-center gap-3 p-3 rounded-card bg-white shadow-skydark"
               >
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
-                  style={{ backgroundColor: m.color }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-semibold"
+                  style={avatarStyle(m.color)}
                 >
                   {m.initial}
                 </div>
@@ -212,6 +213,14 @@ export default function RewardsView() {
         </div>
         <div>
           <h3 className="text-sm font-medium text-skydark-text-secondary mb-3">Redeem</h3>
+          {rewards.length === 0 && (
+            <div className="rounded-card border-2 border-dashed border-gray-200 px-4 py-8 text-center">
+              <p className="font-medium text-skydark-text">No rewards yet</p>
+              <p className="mt-1 text-sm text-skydark-text-secondary">
+                Add something to work toward, like a movie night or extra screen time, with the + button.
+              </p>
+            </div>
+          )}
           <ul className="space-y-2">
             {rewards.map((r) => {
               const eligibleMembers = familyMembers.filter((m) => (points[m.id] ?? 0) >= r.points);
@@ -241,8 +250,8 @@ export default function RewardsView() {
                             key={m.id}
                             type="button"
                             onClick={() => handleRedeemClick(m.id, r.id, r.points)}
-                            className="w-11 h-11 rounded-full text-white text-sm font-semibold flex-shrink-0 hover:opacity-90"
-                            style={{ backgroundColor: m.color }}
+                            className="w-11 h-11 rounded-full text-sm font-semibold flex-shrink-0 hover:opacity-90"
+                            style={avatarStyle(m.color)}
                             title={`Redeem for ${m.name}`}
                           >
                             {m.initial}

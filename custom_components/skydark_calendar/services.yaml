@@ -176,11 +176,11 @@ add_meal_recipe:
 
 upload_photo:
   name: Upload photo
-  description: Register a photo (file must already exist at file_path within config directory).
+  description: Add an image from the Home Assistant config folder (for example a camera snapshot) to the Skydark photo slideshow. The file is copied into Media > Calendar Images.
   fields:
     file_path:
       name: File path
-      description: Path to the photo file (within Home Assistant config directory)
+      description: Path to a JPEG, PNG, GIF or WebP file inside the config folder, e.g. /config/www/snapshot.jpg
       required: true
       selector:
         text:

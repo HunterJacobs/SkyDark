@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SettingsSidebar, { type SettingsSectionId } from "../components/Settings/SettingsSidebar";
 import SettingsSection, { SettingRow } from "../components/Settings/SettingsSection";
@@ -19,7 +19,28 @@ import {
 import CalendarSyncSettings from "../components/Settings/CalendarSyncSettings";
 import { useViewportSimulator } from "../contexts/ViewportSimulatorContext";
 import { VIEWPORT_PRESETS } from "../lib/viewportPresets";
+import { avatarStyle } from "../lib/colors";
+import { useSkydarkDataContext } from "../contexts/SkydarkDataContext";
+import { updateConfig } from "../lib/skyDarkApi";
 
+/** Version of this panel build (from manifest.json at build time). */
+const PANEL_VERSION = __SKYDARK_VERSION__;
+
+type SaveState = { status: "idle" | "saving" | "saved" | "error"; message?: string };
+
+function SaveHint({ state }: { state: SaveState }) {
+  if (state.status === "idle") return null;
+  const text =
+    state.status === "saving" ? "Saving…" : state.status === "saved" ? "Saved" : state.message ?? "Couldn't save";
+  return (
+    <span
+      role={state.status === "error" ? "alert" : "status"}
+      className={`text-xs ${state.status === "error" ? "text-red-600" : "text-skydark-text-secondary"}`}
+    >
+      {text}
+    </span>
+  );
+}
 export default function SettingsView() {
   const {
     familyMembers: members,
@@ -34,15 +55,54 @@ export default function SettingsView() {
   } = useAppContext();
   const navigate = useNavigate();
   const viewportSimulator = useViewportSimulator();
+  const skydark = useSkydarkDataContext();
+  const conn = skydark?.data?.connection ?? null;
+  const serverConfig = skydark?.data?.config ?? null;
+  const integrationVersion = serverConfig?.version ?? null;
   const pendingPinActionRef = useRef<(() => void) | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
-  const [weatherEntity, setWeatherEntity] = useState("");
+  const [weatherEntity, setWeatherEntity] = useState(serverConfig?.weather_entity ?? "");
+  const [weatherSave, setWeatherSave] = useState<SaveState>({ status: "idle" });
+  const [familyNameSave, setFamilyNameSave] = useState<SaveState>({ status: "idle" });
+
+  // Keep the field in sync when the server value arrives or changes elsewhere.
+  useEffect(() => {
+    setWeatherEntity(serverConfig?.weather_entity ?? "");
+  }, [serverConfig?.weather_entity]);
+
+  const saveSharedConfig = async (
+    values: { family_name?: string; weather_entity?: string },
+    setState: (s: SaveState) => void
+  ) => {
+    if (!conn) return;
+    setState({ status: "saving" });
+    try {
+      await updateConfig(conn, values);
+      setState({ status: "saved" });
+      void skydark?.refetch();
+    } catch (err) {
+      const message =
+        err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : undefined;
+      setState({ status: "error", message });
+    }
+  };
+
+  const saveFamilyName = () => {
+    const name = (settings.familyName ?? "").trim();
+    if (!name || name === serverConfig?.family_name) return;
+    void saveSharedConfig({ family_name: name }, setFamilyNameSave);
+  };
+
+  const saveWeatherEntity = () => {
+    const value = weatherEntity.trim();
+    if (value === (serverConfig?.weather_entity ?? "")) return;
+    void saveSharedConfig({ weather_entity: value }, setWeatherSave);
+  };
   const [showDisableLockPrompt, setShowDisableLockPrompt] = useState(false);
   const [showSetPin, setShowSetPin] = useState(false);
   const [setPinStep, setSetPinStep] = useState<"current" | "new" | "confirm">("current");
   const [newPinForConfirm, setNewPinForConfirm] = useState("");
   const [pinError, setPinError] = useState("");
-  const [keyboardClicks, setKeyboardClicks] = useState(true);
   const [addProfileOpen, setAddProfileOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<{ id: string; name: string } | null>(null);
   const [editColorMember, setEditColorMember] = useState<{ id: string; name: string; color: string } | null>(null);
@@ -152,35 +212,45 @@ export default function SettingsView() {
       <SettingsSidebar activeId={activeSection} onSelect={setActiveSection} />
 
       <div className="flex-1 min-w-0 py-4 sm:py-6 px-4 sm:px-8 overflow-auto">
+        <div className="max-w-3xl">
         {activeSection === "general" && (
           <>
             <h2 className="text-xl font-semibold text-skydark-text mb-6">General</h2>
 
             <SettingsSection title="Family" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Family name</label>
+                <div className="flex items-center justify-between gap-2 mb-1.5 max-w-md">
+                  <label htmlFor="family-name" className="block text-sm font-medium text-skydark-text">
+                    Family name
+                  </label>
+                  <SaveHint state={familyNameSave} />
+                </div>
                 <input
+                  id="family-name"
                   type="text"
+                  maxLength={60}
                   value={settings.familyName ?? "My Family"}
-                  onChange={(e) => setSettings({ familyName: e.target.value })}
+                  onChange={(e) => {
+                    setFamilyNameSave({ status: "idle" });
+                    setSettings({ familyName: e.target.value });
+                  }}
+                  onBlur={saveFamilyName}
+                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                   className="input-skydark max-w-md"
                 />
               </div>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-2">Family members</label>
-                <ul className="space-y-2">
+                <span className="block text-sm font-medium text-skydark-text mb-2">Family members</span>
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
                   {members.map((m) => (
-                    <li
-                      key={m.id}
-                      className="flex items-center gap-3 p-3 rounded-card-lg bg-white shadow-skydark"
-                    >
+                    <li key={m.id} className="flex items-center gap-3 px-3 py-2.5">
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
-                        style={{ backgroundColor: m.color }}
+                        className="w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0"
+                        style={avatarStyle(m.color)}
                       >
                         {m.initial}
                       </div>
-                      <span className="flex-1 font-medium text-skydark-text">{m.name}</span>
+                      <span className="flex-1 min-w-0 truncate font-medium text-skydark-text">{m.name}</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -206,37 +276,50 @@ export default function SettingsView() {
                 <button
                   type="button"
                   onClick={() => setAddProfileOpen(true)}
-                  className="btn-ghost mt-2 text-skydark-accent hover:text-skydark-accent"
+                  className="btn-ghost mt-2 -ml-3 text-skydark-accent hover:text-skydark-accent"
                 >
-                  + Add profile
+                  + Add family member
                 </button>
               </div>
             </SettingsSection>
 
-            <SettingsSection title="Display" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>
+            <SettingsSection title="Weather" icon={<DisplayIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Weather entity (Home Assistant)</label>
-                <input
-                  type="text"
-                  value={weatherEntity}
-                  onChange={(e) => setWeatherEntity(e.target.value)}
-                  placeholder="weather.home"
-                  className="input-skydark max-w-md"
-                />
-              </div>
-            </SettingsSection>
-
-            <SettingsSection title="Volume" icon={<GeneralIcon className="w-5 h-5 text-skydark-text-secondary" />}>
-              <SettingRow
-                label="Keyboard clicks"
-                control={
-                  <Toggle
-                    checked={keyboardClicks}
-                    onChange={setKeyboardClicks}
-                    aria-label="Keyboard clicks"
+                <div className="flex items-center justify-between gap-2 mb-1.5 max-w-md">
+                  <label htmlFor="weather-entity" className="block text-sm font-medium text-skydark-text">
+                    Weather entity
+                  </label>
+                  <SaveHint state={weatherSave} />
+                </div>
+                <div className="flex gap-2 max-w-md">
+                  <input
+                    id="weather-entity"
+                    type="text"
+                    value={weatherEntity}
+                    onChange={(e) => {
+                      setWeatherSave({ status: "idle" });
+                      setWeatherEntity(e.target.value);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && saveWeatherEntity()}
+                    placeholder="weather.home"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="input-skydark flex-1 min-w-0"
                   />
-                }
-              />
+                  <button
+                    type="button"
+                    onClick={saveWeatherEntity}
+                    disabled={!conn || weatherEntity.trim() === (serverConfig?.weather_entity ?? "")}
+                    className="btn-secondary shrink-0"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-skydark-text-secondary">
+                  Shown in the header and sleep mode. Leave empty to hide the weather.
+                </p>
+              </div>
             </SettingsSection>
           </>
         )}
@@ -320,7 +403,7 @@ export default function SettingsView() {
                           ["claimRewards", "Claim rewards"],
                           ["meals", "Meals (all)"],
                           ["mealprep", "Meal prep (check/uncheck ingredients)"],
-                          ["importPhotos", "Import photos"],
+                          ["importPhotos", "Add & delete photos"],
                           ["changeSettings", "Change any settings"],
                         ] as const
                       ).map(([key, label]) => (
@@ -361,9 +444,10 @@ export default function SettingsView() {
         {activeSection === "display" && (
           <>
             <h2 className="text-xl font-semibold text-skydark-text mb-6">Display</h2>
-            <SettingsSection title="Screen Saver" icon={<DisplayIcon className="w-5 h-5 text-skydark-text-secondary" />}>
+            <SettingsSection title="Sleep mode" icon={<DisplayIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <SettingRow
-                label="Show photo screen saver after inactivity"
+                label="Start sleep mode automatically"
+                value="Shows a photo slideshow with the time and weather when nobody is using the screen."
                 control={
                   <Toggle
                     checked={settings.screensaverEnabled}
@@ -372,8 +456,9 @@ export default function SettingsView() {
                   />
                 }
               />
+              {settings.screensaverEnabled && (
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Idle time before screen saver (minutes)</label>
+                <label className="block text-sm font-medium text-skydark-text mb-1.5">Start after (minutes of inactivity)</label>
                 <input
                   type="number"
                   min={1}
@@ -388,8 +473,11 @@ export default function SettingsView() {
                   className="input-skydark max-w-[120px]"
                 />
               </div>
+              )}
+            </SettingsSection>
+            <SettingsSection title="Slideshow" icon={<DisplayIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Image transition (Sleep mode)</label>
+                <label className="block text-sm font-medium text-skydark-text mb-1.5">Transition</label>
                 <select
                   value={settings.screensaverTransitionType}
                   onChange={(e) =>
@@ -427,7 +515,8 @@ export default function SettingsView() {
                         });
                       }
                     }}
-                    className="input-skydark"
+                    className="input-skydark w-auto"
+                    aria-label="Interval unit"
                   >
                     <option value="seconds">Seconds</option>
                     <option value="minutes">Minutes</option>
@@ -451,10 +540,8 @@ export default function SettingsView() {
                       }
                     }}
                     className="input-skydark max-w-[100px]"
+                    aria-label="Time between photos"
                   />
-                  <span className="text-sm text-skydark-text-secondary">
-                    {settings.screensaverSlideshowIntervalUnit === "minutes" ? "min" : "sec"}
-                  </span>
                 </div>
               </div>
               <div className="py-3">
@@ -475,7 +562,7 @@ export default function SettingsView() {
                 />
               </div>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Sleep mode time size</label>
+                <label className="block text-sm font-medium text-skydark-text mb-1.5">Clock size</label>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-skydark-text-secondary shrink-0">Small</span>
                   <input
@@ -495,7 +582,7 @@ export default function SettingsView() {
                 </div>
               </div>
               <div className="py-3">
-                <label className="block text-sm font-medium text-skydark-text mb-1.5">Sleep mode weather size</label>
+                <label className="block text-sm font-medium text-skydark-text mb-1.5">Weather size</label>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-skydark-text-secondary shrink-0">Small</span>
                   <input
@@ -521,6 +608,32 @@ export default function SettingsView() {
         {activeSection === "developer" && (
           <>
             <h2 className="text-xl font-semibold text-skydark-text mb-6">Developer</h2>
+            <SettingsSection title="About" icon={<DeveloperIcon className="w-5 h-5 text-skydark-text-secondary" />}>
+              <SettingRow
+                label="Panel version"
+                control={<span className="text-sm font-mono text-skydark-text" data-testid="panel-version">{PANEL_VERSION}</span>}
+              />
+              <SettingRow
+                label="Integration version"
+                value={integrationVersion ? undefined : "Not reported by Home Assistant"}
+                control={
+                  <span className="text-sm font-mono text-skydark-text" data-testid="integration-version">
+                    {integrationVersion ?? "—"}
+                  </span>
+                }
+              />
+              {integrationVersion && integrationVersion !== PANEL_VERSION && (
+                <div
+                  role="alert"
+                  className="my-2 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-900"
+                >
+                  <span>This screen is running an older panel than the installed integration.</span>
+                  <button type="button" onClick={() => window.location.reload()} className="btn-secondary">
+                    Reload panel
+                  </button>
+                </div>
+              )}
+            </SettingsSection>
             <SettingsSection title="Viewport Tester" icon={<DeveloperIcon className="w-5 h-5 text-skydark-text-secondary" />}>
               <SettingRow
                 label="Developer Mode"
@@ -549,15 +662,26 @@ export default function SettingsView() {
               </div>
               <SettingRow
                 label="Orientation"
-                value={viewportSimulator.orientation === "landscape" ? "Landscape" : "Portrait"}
                 control={
-                  <Toggle
-                    checked={viewportSimulator.orientation === "landscape"}
-                    onChange={(checked) =>
-                      viewportSimulator.setOrientation(checked ? "landscape" : "portrait")
-                    }
-                    aria-label="Landscape orientation"
-                  />
+                  <div role="radiogroup" aria-label="Orientation" className="inline-flex rounded-xl bg-gray-100 p-1">
+                    {(["portrait", "landscape"] as const).map((o) => {
+                      const active = viewportSimulator.orientation === o;
+                      return (
+                        <button
+                          key={o}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => viewportSimulator.setOrientation(o)}
+                          className={`px-3 min-h-[36px] rounded-lg text-sm font-medium capitalize transition-colors ${
+                            active ? "bg-white text-skydark-text shadow-sm" : "text-skydark-text-secondary hover:text-skydark-text"
+                          }`}
+                        >
+                          {o}
+                        </button>
+                      );
+                    })}
+                  </div>
                 }
               />
               <SettingRow
@@ -580,7 +704,7 @@ export default function SettingsView() {
                   />
                 }
               />
-              <div className="pt-3">
+              <div className="py-3">
                 <button
                   type="button"
                   onClick={viewportSimulator.resetToRealDevice}
@@ -592,6 +716,7 @@ export default function SettingsView() {
             </SettingsSection>
           </>
         )}
+        </div>
       </div>
 
       <AddProfileModal
@@ -609,7 +734,8 @@ export default function SettingsView() {
         {memberToDelete && (
           <div className="space-y-4">
             <p className="text-sm text-skydark-text-secondary">
-              This will remove {memberToDelete.name} from family members. This cannot be undone.
+              {memberToDelete.name}'s chores and reward points will be deleted too. Their events and
+              lists are kept but no longer assigned to anyone. This can't be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button

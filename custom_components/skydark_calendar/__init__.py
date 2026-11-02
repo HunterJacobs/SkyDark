@@ -12,6 +12,7 @@ from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
     CONF_IMPORT_EXISTING,
@@ -78,29 +79,50 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     return True
 
 
+def _sync_options(cfg: dict[str, Any]) -> tuple[list[str], list[str], bool]:
+    return (
+        sorted(cfg.get(CONF_PULL_CALENDARS) or []),
+        sorted(cfg.get(CONF_PUSH_CALENDARS) or []),
+        bool(cfg.get(CONF_IMPORT_EXISTING, False)),
+    )
+
+
+async def _async_register_http(hass: HomeAssistant) -> None:
+    """Register the panel's static files once per HA run.
+
+    aiohttp refuses duplicate routes, so re-registering on an entry reload
+    would make setup fail. Routes can't be removed, so they stay registered
+    after unload (harmless: the sidebar panel itself is removed).
+    """
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get("http_registered"):
+        return
+    www_path = Path(__file__).parent / "www"
+    if not await hass.async_add_executor_job(www_path.exists):
+        _LOGGER.error("Skydark frontend files are missing from %s", www_path)
+        return
+    hass.http.register_view(SkyDarkIndexView(www_path))
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=True)]
+    )
+    domain_data["http_registered"] = True
+
+
+def _cleanup_entry_data(hass: HomeAssistant) -> None:
+    domain_data = hass.data.get(DOMAIN, {})
+    sync = domain_data.pop("sync", None)
+    if sync:
+        sync.stop()
+    for key in ("db", "panel_url", "entry_id", "config", "ws_registered"):
+        domain_data.pop(key, None)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Skydark Calendar from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
     try:
-        www_path = Path(__path__[0]) / "www"
-        www_exists = await hass.async_add_executor_job(www_path.exists)
-        if www_exists:
-            hass.http.register_view(SkyDarkIndexView(www_path))
-            await hass.http.async_register_static_paths(
-                [StaticPathConfig(PANEL_URL, str(www_path), cache_headers=True)]
-            )
-
-        async_remove_panel(hass, "skydark")
-        async_register_built_in_panel(
-            hass,
-            component_name="iframe",
-            sidebar_title=PANEL_TITLE,
-            sidebar_icon=PANEL_ICON,
-            frontend_url_path="skydark",
-            config={"url": f"{PANEL_URL}/index.html"},
-            require_admin=False,
-        )
+        await _async_register_http(hass)
 
         db_path = Path(hass.config.config_dir) / DOMAIN / DB_NAME
         await hass.async_add_executor_job(
@@ -108,74 +130,86 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         db = SkydarkDatabase(db_path)
         await hass.async_add_executor_job(db.init)
-        hass.data[DOMAIN]["db"] = db
-        hass.data[DOMAIN]["panel_url"] = PANEL_URL
-        hass.data[DOMAIN]["entry_id"] = entry.entry_id
-        hass.data[DOMAIN]["config"] = {**entry.data, **(entry.options or {})}
+    except Exception as err:
+        _LOGGER.exception("Skydark Calendar could not open its database")
+        raise ConfigEntryNotReady(f"Could not open the Skydark database: {err}") from err
 
-        from .calendar_sync import SkydarkCalendarSync
+    domain_data = hass.data[DOMAIN]
+    domain_data["db"] = db
+    domain_data["panel_url"] = PANEL_URL
+    domain_data["entry_id"] = entry.entry_id
+    cfg = {**entry.data, **(entry.options or {})}
+    domain_data["config"] = cfg
 
-        sync = SkydarkCalendarSync(hass, db)
-        hass.data[DOMAIN]["sync"] = sync
-        cfg = hass.data[DOMAIN]["config"]
-        existing_links = await hass.async_add_executor_job(db.get_sync_links)
-        if not existing_links and (cfg.get(CONF_PULL_CALENDARS) or cfg.get(CONF_PUSH_CALENDARS)):
-            await sync.apply_config_links(
-                list(cfg.get(CONF_PULL_CALENDARS) or []),
-                list(cfg.get(CONF_PUSH_CALENDARS) or []),
-                bool(cfg.get(CONF_IMPORT_EXISTING, True)),
-            )
-        elif existing_links:
-            hass.async_create_task(sync.async_sync_all())
-        sync.start()
+    from .calendar_sync import SkydarkCalendarSync
 
+    sync = SkydarkCalendarSync(hass, db)
+    domain_data["sync"] = sync
+
+    try:
         await async_register_websocket_handlers(hass)
 
         from . import services as skydark_services
 
         await skydark_services.async_setup_services(hass)
-
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-        return True
-    except Exception as err:
-        _LOGGER.exception("Skydark Calendar setup failed: %s", err)
-        async_remove_panel(hass, "skydark")
-        if DOMAIN in hass.data:
-            hass.data[DOMAIN].pop("db", None)
-            hass.data[DOMAIN].pop("panel_url", None)
-            hass.data[DOMAIN].pop("entry_id", None)
-            hass.data[DOMAIN].pop("config", None)
-        return False
+    except Exception:
+        _cleanup_entry_data(hass)
+        raise
+
+    async_register_built_in_panel(
+        hass,
+        component_name="iframe",
+        sidebar_title=PANEL_TITLE,
+        sidebar_icon=PANEL_ICON,
+        frontend_url_path="skydark",
+        config={"url": f"{PANEL_URL}/index.html"},
+        require_admin=False,
+        update=True,
+    )
+
+    # Calendar sync failures shouldn't stop the panel from loading.
+    existing_links = await hass.async_add_executor_job(db.get_sync_links)
+    pull, push, import_existing = _sync_options(cfg)
+    if not existing_links and (pull or push):
+        hass.async_create_task(
+            sync.apply_config_links(pull, push, bool(cfg.get(CONF_IMPORT_EXISTING, True)))
+        )
+    elif existing_links:
+        hass.async_create_task(sync.async_sync_all())
+    sync.start()
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Apply options (including calendar sync) without requiring a reinstall."""
-    if DOMAIN not in hass.data:
+    """Apply changed options without requiring a restart.
+
+    Only re-apply calendar links when the sync options themselves changed, so
+    saving an unrelated option (like the weather entity) doesn't reset links
+    configured from the panel.
+    """
+    domain_data = hass.data.get(DOMAIN)
+    if not domain_data:
         return
-    hass.data[DOMAIN]["config"] = {**entry.data, **(entry.options or {})}
-    sync = hass.data[DOMAIN].get("sync")
-    cfg = hass.data[DOMAIN]["config"]
-    if not sync:
+    previous = domain_data.get("config") or {}
+    cfg = {**entry.data, **(entry.options or {})}
+    domain_data["config"] = cfg
+    sync = domain_data.get("sync")
+    if not sync or _sync_options(previous) == _sync_options(cfg):
         return
-    pull = list(cfg.get(CONF_PULL_CALENDARS) or [])
-    push = list(cfg.get(CONF_PUSH_CALENDARS) or [])
-    await sync.apply_config_links(pull, push, bool(cfg.get(CONF_IMPORT_EXISTING, False)))
+    pull, push, import_existing = _sync_options(cfg)
+    await sync.apply_config_links(pull, push, import_existing)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
     for name in _SERVICES:
         hass.services.async_remove(DOMAIN, name)
-    if DOMAIN in hass.data:
-        sync = hass.data[DOMAIN].pop("sync", None)
-        if sync:
-            sync.stop()
-        hass.data[DOMAIN].pop("db", None)
-        hass.data[DOMAIN].pop("panel_url", None)
-        hass.data[DOMAIN].pop("entry_id", None)
-        hass.data[DOMAIN].pop("config", None)
-        hass.data[DOMAIN].pop("ws_registered", None)
+    _cleanup_entry_data(hass)
     async_remove_panel(hass, "skydark")
     return unload_ok

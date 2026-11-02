@@ -28,7 +28,7 @@ The HACS Action fails if the repo has no **description** or **topics**. Do this 
    - `hacs.json`
    - `.github/workflows/hacs.yaml`
    - `.github/workflows/hassfest.yaml`
-   - `custom_components/skydark_calendar/brand/icon.png`
+   - `custom_components/skydark_calendar/brand/icon.png` (256×256) and `icon@2x.png` (512×512)
    - `info.md` (at repository root — used as the HACS store description)
 
 2. On GitHub: **Actions** tab → confirm both workflows run and pass:

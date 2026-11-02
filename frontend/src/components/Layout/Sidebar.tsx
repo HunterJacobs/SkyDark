@@ -33,25 +33,23 @@ export const navItems = [
 
 export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  // Desktop/tablet rail: icon with a short label underneath, so nothing is a guessing game.
   const nav = (
-    <div className={`flex ${mobile ? "flex-row justify-around w-full" : "flex-col items-center gap-1 w-full"}`}>
+    <div className="flex flex-col items-center gap-1 w-full px-2">
       {navItems.map(({ path, label, Icon }) => (
         <NavLink
           key={path}
           to={path}
           className={({ isActive }) =>
-            `flex items-center justify-center rounded-full transition-colors ${
-              mobile ? "w-11 h-11" : "w-12 h-12"
-            } ${
+            `w-full flex flex-col items-center justify-center gap-1 rounded-xl py-2 transition-colors ${
               isActive
-                ? "bg-[rgba(59,155,191,0.1)] text-skydark-accent"
-                : "text-skydark-text-secondary hover:bg-gray-100"
+                ? "bg-skydark-accent-bg text-skydark-accent"
+                : "text-skydark-text-secondary hover:bg-gray-100 hover:text-skydark-text"
             }`
           }
-          title={label}
-          aria-label={label}
         >
           <Icon />
+          <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
         </NavLink>
       ))}
     </div>
@@ -84,8 +82,7 @@ export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
 
   return (
     <aside
-      className="hidden md:flex flex-col items-center py-4 flex-shrink-0 border-r border-gray-200 bg-white w-20"
-      style={{ width: 80 }}
+      className="hidden md:flex flex-col items-center py-4 flex-shrink-0 border-r border-gray-200 bg-white w-[88px] overflow-y-auto"
       aria-label="Main navigation"
     >
       <div className="mb-4 flex items-center justify-center text-skydark-accent" aria-hidden>

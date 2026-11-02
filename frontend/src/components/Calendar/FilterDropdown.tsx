@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { FamilyMember } from "../../types/calendar";
 import Toggle from "../Common/Toggle";
+import { avatarStyle } from "../../lib/colors";
 
 interface FilterDropdownProps {
   familyMembers: FamilyMember[];
@@ -86,8 +87,8 @@ export default function FilterDropdown({
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
-                      style={{ backgroundColor: member.color }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
+                      style={avatarStyle(member.color)}
                     >
                       {member.initial ?? member.name.charAt(0)}
                     </div>

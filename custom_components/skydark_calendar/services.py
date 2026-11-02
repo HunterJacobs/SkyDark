@@ -12,8 +12,10 @@ from typing import Any, Callable
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
+from . import photo_media
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -339,9 +341,11 @@ SEND_NOTIFICATION_SCHEMA = vol.Schema(
 
 
 def _get_db(hass: HomeAssistant):
-    if DOMAIN not in hass.data:
-        return None
-    return hass.data[DOMAIN].get("db")
+    """Return the database, or raise a user-visible error if the integration isn't loaded."""
+    db = hass.data.get(DOMAIN, {}).get("db")
+    if db is None:
+        raise HomeAssistantError("Skydark Calendar is not loaded yet. Try again in a moment.")
+    return db
 
 
 def _schedule_payload(data: dict[str, Any]) -> dict[str, Any] | None:
@@ -391,10 +395,7 @@ def _normalize_ingredients(value: Any) -> list | str | None:
 
 
 async def _run_db(hass: HomeAssistant, fn: Callable, *args: Any, **kwargs: Any) -> Any:
-    db = _get_db(hass)
-    if not db:
-        _LOGGER.warning("Database not ready")
-        return None
+    _get_db(hass)
     try:
         if kwargs:
             result = await hass.async_add_executor_job(partial(fn, *args, **kwargs))
@@ -412,8 +413,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def add_event(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         event_id = await _run_db(
             hass,
             db.add_event,
@@ -436,8 +435,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def update_event(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         fields = {
             k: call.data[k]
             for k in (
@@ -459,8 +456,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_event(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         event_id = call.data["event_id"]
         sync = hass.data.get(DOMAIN, {}).get("sync")
         if sync:
@@ -479,8 +474,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def complete_task(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         parsed_date = None
         completed_date_str = call.data.get("completed_date")
         if completed_date_str:
@@ -501,14 +494,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def uncomplete_task(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.uncomplete_task_and_revoke_points, call.data["task_id"])
 
     async def add_task(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_task,
@@ -524,8 +513,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def update_task(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         kwargs: dict[str, Any] = {}
         for key in ("title", "assignee_id", "category", "frequency", "icon", "points", "due_date"):
             if key in call.data:
@@ -537,14 +524,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_task(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_task, call.data["task_id"])
 
     async def add_points(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_points,
@@ -556,8 +539,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def redeem_reward(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         ok = await _run_db(
             hass,
             db.redeem_reward,
@@ -565,12 +546,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             call.data["reward_id"],
         )
         if ok is False:
-            _LOGGER.warning("redeem_reward: insufficient points or invalid reward")
+            raise ServiceValidationError(
+                "Not enough points to redeem this reward, or the reward no longer exists."
+            )
 
     async def add_reward(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_reward,
@@ -582,14 +563,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_reward(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_reward, call.data["reward_id"])
 
     async def create_list(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_list,
@@ -601,14 +578,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_list(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_list, call.data["list_id"])
 
     async def add_meal_recipe(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_meal_recipe,
@@ -618,14 +591,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_meal_recipe(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_meal_recipe, call.data["recipe_id"])
 
     async def add_meal(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_meal,
@@ -639,8 +608,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def update_meal(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         kwargs: dict[str, Any] = {}
         for key in ("name", "meal_date", "meal_type", "recipe_url", "meal_recipe_id"):
             if key in call.data:
@@ -651,14 +618,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_meal(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_meal, call.data["meal_id"])
 
     async def add_family_member(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(
             hass,
             db.add_family_member,
@@ -670,8 +633,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def update_family_member(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         kwargs: dict[str, Any] = {}
         for key in ("name", "color", "initial", "avatar_url", "sort_order"):
             if key in call.data:
@@ -680,56 +641,47 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def delete_family_member(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_family_member, call.data["member_id"])
 
     async def upload_photo(call: ServiceCall) -> None:
+        """Copy an image from the config folder into Media > Calendar Images."""
         db = _get_db(hass)
-        if not db:
-            return
-
         file_path = call.data["file_path"]
         config_dir = Path(hass.config.config_dir).resolve()
+        source = Path(file_path)
+        if not source.is_absolute():
+            source = config_dir / source
         try:
-            resolved_path = Path(file_path).resolve()
-            if not resolved_path.is_relative_to(config_dir):
-                _LOGGER.warning(
-                    "upload_photo: rejected file_path '%s' outside config directory",
-                    file_path,
-                )
-                return
-            if not resolved_path.is_file():
-                _LOGGER.warning("upload_photo: file does not exist '%s'", file_path)
-                return
+            source = source.resolve()
         except (ValueError, OSError) as err:
-            _LOGGER.warning("upload_photo: invalid file_path '%s': %s", file_path, err)
-            return
+            raise ServiceValidationError(f"Invalid file path: {file_path}") from err
+        if not source.is_relative_to(config_dir):
+            raise ServiceValidationError("The photo must be inside the Home Assistant config folder.")
+        if not await hass.async_add_executor_job(source.is_file):
+            raise ServiceValidationError(f"File not found: {file_path}")
+        try:
+            media_url = await hass.async_add_executor_job(photo_media.copy_file, hass, source)
+        except photo_media.PhotoError as err:
+            raise ServiceValidationError(str(err)) from err
 
         await _run_db(
             hass,
             db.add_photo,
-            file_path=file_path,
+            file_path=media_url,
             caption=call.data.get("caption"),
             uploaded_by=call.data.get("uploaded_by"),
         )
 
     async def add_list_item(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.add_list_item, call.data["list_id"], call.data["content"])
 
     async def toggle_list_item(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.toggle_list_item, call.data["item_id"])
 
     async def delete_list_item(call: ServiceCall) -> None:
         db = _get_db(hass)
-        if not db:
-            return
         await _run_db(hass, db.delete_list_item, call.data["item_id"])
 
     async def send_notification(call: ServiceCall) -> None:

@@ -41,10 +41,22 @@ import {
   deleteFamilyMember,
   addReward,
   deleteReward,
+  updateConfig,
 } from "./db.js";
+import { readFileSync } from "node:fs";
+
+// Report the same version Home Assistant would (from the integration manifest).
+const VERSION = (() => {
+  try {
+    const url = new URL("../custom_components/skydark_calendar/manifest.json", import.meta.url);
+    return JSON.parse(readFileSync(url, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+})();
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: [/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/] }));
 app.use(express.json({ limit: "1mb" }));
 
 function handleMessage(msg) {
@@ -74,10 +86,16 @@ function handleMessage(msg) {
       const meals = getMeals(msg.start_date, msg.end_date);
       return sendResult({ meals });
     }
-    case "skydark_calendar/get_config": {
-      const config = getConfig();
-      return sendResult(config);
-    }
+    case "skydark_calendar/get_config":
+      return sendResult({ ...getConfig(), version: VERSION });
+    case "skydark_calendar/update_config":
+      return sendResult(updateConfig(msg));
+    case "skydark_calendar/get_photos":
+      // Photo storage needs Home Assistant media; the panel falls back to sample photos.
+      return sendResult({ photos: [], supported: false });
+    case "skydark_calendar/upload_photo":
+    case "skydark_calendar/delete_photo":
+      return sendError("unsupported", "Photo storage requires Home Assistant.");
     case "skydark_calendar/get_points": {
       const points_by_member = getPointsByMember();
       return sendResult({ points_by_member });
@@ -202,10 +220,12 @@ app.post("/api/ws", (req, res) => {
 });
 
 const PORT = Number(process.env.PORT) || 4000;
+// Local-only by default: this dev API has no authentication.
+const HOST = process.env.HOST || "127.0.0.1";
 const main = async () => {
   await initDb();
-  app.listen(PORT, () => {
-    console.log("SkyDark standalone API on http://localhost:" + PORT);
+  app.listen(PORT, HOST, () => {
+    console.log(`SkyDark standalone API on http://${HOST}:${PORT}`);
     console.log("POST /api/ws – HA-style message handler");
   });
 };

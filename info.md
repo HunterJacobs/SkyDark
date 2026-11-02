@@ -1,6 +1,6 @@
 # Skydark Family Calendar
 
-A family organization panel for Home Assistant with calendar, chores, lists, meals, photos, rewards, and sleep routines.
+A family organization panel for Home Assistant with calendar, chores, lists, meals, photos, and rewards.
 
 ## Features
 
@@ -8,7 +8,7 @@ A family organization panel for Home Assistant with calendar, chores, lists, mea
 - **Chores & tasks** — Per-person columns, daily/weekly/custom frequency
 - **Lists** — Grocery, to-do, and custom lists with checkboxes
 - **Meals** — Weekly meal planning grid
-- **Photos, rewards, sleep** — Family photos, points/rewards, bedtime checklists
+- **Photos & rewards** — Photo slideshow (sleep mode) stored in HA media, points and rewards
 - **Home Assistant** — Custom panel, SQLite storage, services, sensors, automations
 
 ## Documentation

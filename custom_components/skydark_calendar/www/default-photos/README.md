@@ -1,11 +1,13 @@
-# Default photos
+# Sample photos
 
-On **first load** (no saved data), the app shows these 8 images: `1.png` through `8.png`.
+`1.png` through `8.png` are shown on the Photos page and in sleep mode until the
+family adds photos of their own. As soon as at least one photo has been added,
+the samples are hidden.
 
-- **To use your own default images:** Replace `1.png` … `8.png` in this folder with your own files (same names), then run `npm run build` in the `frontend` folder. New users will see your images as the default set.
-- **Saved and deleted photos:** The app stores the current photo list in the browser (localStorage). So:
-  - Additions and deletions **persist** across refreshes and code updates.
-  - If a user deletes a photo, it stays deleted.
-  - Local/imported photos are stored as data and stay until the user deletes them.
+Photos added from the Photos page are resized in the browser and stored in Home
+Assistant under **Media > My Media > Calendar Images**, so they survive reloads
+and appear on every display. Automations can add photos too with the
+`skydark_calendar.upload_photo` service.
 
-Do not rely on adding extra files (e.g. `9.png`, `10.png`) to this folder to add more “default” photos—the app only uses `1.png`–`8.png` as the initial set. To add more photos, use **Import photos** in the Photos tab.
+To change the samples, replace these files (keeping the same names) and run
+`npm run build` in the `frontend` folder.

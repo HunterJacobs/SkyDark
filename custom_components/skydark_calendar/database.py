@@ -403,6 +403,7 @@ class SkydarkDatabase:
             conn.execute("DELETE FROM tasks WHERE assignee_id = ?", (id_,))
             conn.execute("UPDATE lists SET owner_id = NULL WHERE owner_id = ?", (id_,))
             conn.execute("UPDATE photos SET uploaded_by = NULL WHERE uploaded_by = ?", (id_,))
+            conn.execute("DELETE FROM points_log WHERE member_id = ?", (id_,))
             conn.execute("DELETE FROM family_members WHERE id = ?", (id_,))
 
     # Events
@@ -1114,6 +1115,12 @@ class SkydarkDatabase:
         with self._connection() as conn:
             cur = conn.execute("SELECT * FROM photos ORDER BY created_at DESC")
             return [dict(row) for row in cur.fetchall()]
+
+    def get_photo(self, photo_id: str) -> dict | None:
+        with self._connection() as conn:
+            cur = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
 
     def delete_photo(self, photo_id: str) -> None:
         with self._connection() as conn:

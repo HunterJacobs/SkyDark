@@ -43,6 +43,12 @@ try{
     await page.getByRole('button',{name:'Breakfast Test meal',exact:true}).first().waitFor();
   }
   if(w<768){await page.getByRole('button',{name:'More navigation'}).tap();await page.getByRole('dialog').getByRole('link',{name:'Settings'}).tap();await page.getByRole('button',{name:'Calendar',exact:true}).tap();await page.getByText('Refresh calendars',{exact:true}).waitFor();}
+  // Developer settings show the version from manifest.json; toggles keep their shape on touch screens.
+  await page.goto('http://127.0.0.1:5173/skydark/#/settings');await page.getByRole('button',{name:'Developer',exact:true}).click();
+  const manifestVersion=JSON.parse(fs.readFileSync(root+'/custom_components/skydark_calendar/manifest.json','utf8')).version;
+  const shown=(await page.getByTestId('panel-version').textContent()).trim();if(shown!==manifestVersion)errors.push(`${w} panel version ${shown} != manifest ${manifestVersion}`);
+  const sw=page.getByRole('switch',{name:'Show grid overlay'});const box=await sw.boundingBox();if(!box||box.height>32||box.width<40)errors.push(`${w} toggle distorted: ${JSON.stringify(box)}`);
+  await sw.click();if(await sw.getAttribute('aria-checked')!=='true')errors.push(`${w} toggle did not switch on`);await sw.click();
   console.log(`PASS ${w}x${h}: eight routes, event creation${w<768?', touch navigation and sync settings':''}`);
   await context.close();
  }

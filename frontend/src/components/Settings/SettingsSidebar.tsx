@@ -35,11 +35,12 @@ interface SettingsSidebarProps {
 export default function SettingsSidebar({ activeId, onSelect }: SettingsSidebarProps) {
   return (
     <aside
-      className="flex-shrink-0 w-full md:w-44 border-b md:border-b-0 md:border-r border-gray-200 bg-white/80 p-2 md:py-6"
+      className="flex-shrink-0 w-full md:w-48 border-b md:border-b-0 md:border-r border-gray-200 bg-white/80 px-2 py-2 md:py-6"
       aria-label="Settings navigation"
     >
-      <h2 className="text-base font-semibold text-skydark-text mb-1 text-left">Settings</h2>
-      <nav className="mt-2 flex md:flex-col gap-1 items-start w-full overflow-x-auto" aria-label="Settings sections">
+      <h2 className="hidden md:block text-base font-semibold text-skydark-text mb-1 px-3 text-left">Settings</h2>
+      {/* Phones: all five sections fit in one row (icon over label) instead of a clipped scroller. */}
+      <nav className="md:mt-2 grid grid-cols-5 md:flex md:flex-col gap-1 w-full" aria-label="Settings sections">
         {navItems.map(({ id, label, Icon }) => {
           const isActive = activeId === id;
           return (
@@ -48,7 +49,7 @@ export default function SettingsSidebar({ activeId, onSelect }: SettingsSidebarP
               type="button"
               onClick={() => onSelect(id)}
               className={`
-                flex items-center gap-2 shrink-0 md:w-full min-h-11 rounded-lg py-2.5 pl-3 pr-3 text-left text-sm font-medium transition-colors justify-start
+                flex flex-col md:flex-row items-center gap-1 md:gap-2 min-w-0 md:w-full min-h-11 rounded-lg py-2 md:py-2.5 px-1 md:px-3 text-[11px] md:text-sm font-medium transition-colors justify-center md:justify-start
                 ${isActive
                   ? "bg-skydark-accent-bg text-skydark-accent"
                   : "text-skydark-text-secondary hover:bg-gray-100 hover:text-skydark-text"}
@@ -56,7 +57,7 @@ export default function SettingsSidebar({ activeId, onSelect }: SettingsSidebarP
               aria-current={isActive ? "page" : undefined}
             >
               <Icon className="shrink-0 text-inherit" />
-              <span>{label}</span>
+              <span className="truncate max-w-full">{label}</span>
             </button>
           );
         })}

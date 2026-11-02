@@ -7,3 +7,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Integration version from manifest.json, injected at build time by Vite. */
+declare const __SKYDARK_VERSION__: string;

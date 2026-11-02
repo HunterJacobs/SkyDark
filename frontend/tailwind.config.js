@@ -22,6 +22,7 @@ export default {
           text: "#2B3A4A",
           "text-secondary": "#6B7C8F",
           accent: "#3B9BBF",
+          "accent-dark": "#2F86A6",
           "accent-bg": "rgba(59, 155, 191, 0.1)",
           pink: "#FFD4D4",
           "pink-dark": "#FFBABA",

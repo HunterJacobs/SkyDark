@@ -344,7 +344,10 @@ class SkydarkCalendarSync:
         return [asdict(event) for event in events]
 
     def _entity(self, entity_id: str):
-        from homeassistant.components.calendar.const import DATA_COMPONENT
+        try:
+            from homeassistant.components.calendar.const import DATA_COMPONENT
+        except ImportError:  # Home Assistant before 2024.11 stored it under the domain name
+            DATA_COMPONENT = "calendar"
         component = self.hass.data.get(DATA_COMPONENT)
         entity = component.get_entity(entity_id) if component else None
         state = self.hass.states.get(entity_id)
