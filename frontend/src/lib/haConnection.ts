@@ -1,6 +1,14 @@
 /**
  * Home Assistant WebSocket connection for the SkyDark panel.
- * When running inside HA's iframe (same origin), tries to reuse stored auth.
+ *
+ * Strategy (in order):
+ *  1. Reuse the live connection of the Home Assistant window the panel is
+ *     embedded in (same-origin iframe). This needs no login and works whether
+ *     or not the user ticked "Keep me logged in".
+ *  2. Use tokens Home Assistant saved in localStorage.
+ *  3. Only when opened directly (not inside Home Assistant): the normal login
+ *     redirect. Inside the iframe that redirect fails with "invalid redirect
+ *     URI", so it is never attempted there.
  * When VITE_STANDALONE is set, uses the local standalone API (no HA).
  */
 
@@ -33,6 +41,36 @@ function createStandaloneConnection(): Connection {
 
 let connectionPromise: Promise<Connection> | null = null;
 
+/** The parent Home Assistant window's live connection, if the panel is embedded in it. */
+export function getParentConnection(): Connection | null {
+  try {
+    if (window.parent === window) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ha = (window.parent as any)?.document?.querySelector("home-assistant");
+    const conn: Connection | undefined = ha?.hass?.connection;
+    return conn && typeof conn.sendMessagePromise === "function" ? conn : null;
+  } catch {
+    // Cross-origin parent or sandboxed frame.
+    return null;
+  }
+}
+
+function isEmbedded(): boolean {
+  try {
+    return window.parent !== window;
+  } catch {
+    return true;
+  }
+}
+
+/** Raised when the panel can't reuse or find a Home Assistant login. */
+export class NeedsLoginError extends Error {
+  constructor() {
+    super("Couldn't connect to Home Assistant. Reload the page, or sign in to Home Assistant again.");
+    this.name = "NeedsLoginError";
+  }
+}
+
 if (STANDALONE) {
   connectionPromise = Promise.resolve(createStandaloneConnection());
 }
@@ -42,6 +80,12 @@ if (STANDALONE) {
  */
 export async function getHAConnection(): Promise<Connection> {
   if (connectionPromise) return connectionPromise;
+
+  const parent = getParentConnection();
+  if (parent) {
+    connectionPromise = Promise.resolve(parent);
+    return connectionPromise;
+  }
 
   const {
     createConnection,
@@ -105,13 +149,20 @@ export async function getHAConnection(): Promise<Connection> {
 
   connectionPromise = (async () => {
     const hassUrl = getHassUrl();
+    const embedded = isEmbedded();
+    // With no saved tokens, getAuth goes straight to the login redirect, which
+    // Home Assistant rejects inside its own frame.
+    if (embedded && !(await loadStoredTokens())) throw new NeedsLoginError();
     const auth = await getAuth({
       hassUrl,
       loadTokens: loadStoredTokens,
       saveTokens,
     }).catch((err) => {
-      if (err === ERR_HASS_HOST_REQUIRED) return getAuth({ hassUrl });
-      if (err === ERR_INVALID_AUTH) return getAuth({ hassUrl });
+      if (err === ERR_HASS_HOST_REQUIRED || err === ERR_INVALID_AUTH) {
+        // Starting a login inside Home Assistant's frame is rejected by HA.
+        if (embedded) throw new NeedsLoginError();
+        return getAuth({ hassUrl });
+      }
       throw err;
     });
     const conn = await createConnection({ auth });
