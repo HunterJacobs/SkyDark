@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 import MealModal from "../components/Meals/MealModal";
 import DraggableMealCard from "../components/Meals/DraggableMealCard";
 import DropTargetMealCell from "../components/Meals/DropTargetMealCell";
@@ -88,7 +88,9 @@ function recipesFromSkydark(rows: SkydarkMealRecipe[]): MealRecipe[] {
 export default function MealsView() {
   const skydark = useSkydarkDataContext();
   const { runIfUnlocked, pinPromptProps } = usePinGate();
-  const weekStart = startOfDay(new Date());
+  const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()));
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { void skydark?.refetchMeals(format(weekStart, "yyyy-MM-dd"), format(addDays(weekStart, 6), "yyyy-MM-dd")); }, [weekStart, skydark?.refetchMeals]);
   const [localMeals, setLocalMeals] = useState<MealSlot[]>(loadMeals);
   const [localRecipes, setLocalRecipes] = useState<MealRecipe[]>(loadRecipes);
 
@@ -137,6 +139,7 @@ export default function MealsView() {
   };
 
   const doSaveMeal = async (data: SaveMealPayload) => {
+    setError(null);
     const conn = skydark?.data?.connection;
     const ingredients = data.ingredients.map((i) => ({
       name: i.name,
@@ -167,8 +170,9 @@ export default function MealsView() {
           });
         }
         await skydark?.refetch();
-      } catch {
-        // leave as-is
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save the meal. Please retry.");
+        return;
       }
       setModalOpen(false);
       setSlotForModal(null);
@@ -214,6 +218,7 @@ export default function MealsView() {
 
   const doAssignFromLibrary = async (recipe: MealRecipe) => {
     if (!slotForModal) return;
+    setError(null);
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
@@ -225,8 +230,9 @@ export default function MealsView() {
           meal_recipe_id: recipe.id,
         });
         await skydark?.refetch();
-      } catch {
-        // leave as-is
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save the meal. Please retry.");
+        return;
       }
     } else {
       const id = `${slotForModal.date}-${slotForModal.mealType}-${Date.now()}`;
@@ -241,13 +247,15 @@ export default function MealsView() {
   };
 
   const doRemoveMeal = async (slotId: string) => {
+    setError(null);
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
         await serviceDeleteMeal(conn, slotId);
         await skydark?.refetch();
-      } catch {
-        // leave as-is
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save the meal. Please retry.");
+        return;
       }
     } else {
       setLocalMeals((prev) => prev.filter((m) => m.id !== slotId));
@@ -262,13 +270,15 @@ export default function MealsView() {
   };
 
   const doRemoveFromLibrary = async (recipeId: string) => {
+    setError(null);
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
         await serviceDeleteMealRecipe(conn, recipeId);
         await skydark?.refetch();
-      } catch {
-        // leave as-is
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save the meal. Please retry.");
+        return;
       }
     } else {
       setLocalRecipes((prev) => prev.filter((r) => r.id !== recipeId));
@@ -286,6 +296,7 @@ export default function MealsView() {
   };
 
   const doUpdateRecipe = (recipeId: string, data: SaveMealPayload) => {
+    if (skydark?.data.connection) { setError("Editing saved library recipes is not supported by the backend yet. Create a new recipe instead."); return; }
     setLocalRecipes((prev) =>
       prev.map((r) =>
         r.id === recipeId ? { ...r, name: data.name, ingredients: data.ingredients, imageUrl: data.imageUrl, instructions: data.instructions } : r
@@ -304,6 +315,7 @@ export default function MealsView() {
   };
 
   const doDropFromPopular = async (recipe: MealRecipe, date: string, mealType: string) => {
+    setError(null);
     const conn = skydark?.data?.connection;
     if (conn) {
       try {
@@ -315,8 +327,9 @@ export default function MealsView() {
           meal_recipe_id: recipe.id,
         });
         await skydark?.refetch();
-      } catch {
-        // leave as-is
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save the meal. Please retry.");
+        return;
       }
       return;
     }
@@ -345,11 +358,30 @@ export default function MealsView() {
   }, [meals, recipes]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true, delayTouchStart: 250, touchSlop: 12 }}>
     <div className="h-full">
-      <h2 className="text-lg font-semibold text-skydark-text mb-4">Meals</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg font-semibold">Meals · {format(weekStart, "MMM d")}</h2>
+        <div className="flex gap-1"><button className="btn-icon" aria-label="Previous meal week" onClick={() => setWeekStart(d => addDays(d,-7))}>‹</button><button className="btn-ghost" onClick={() => setWeekStart(startOfDay(new Date()))}>This week</button><button className="btn-icon" aria-label="Next meal week" onClick={() => setWeekStart(d => addDays(d,7))}>›</button></div>
+      </div>
+      {error && <p role="alert" className="p-3 mb-3 rounded-xl bg-red-50 text-red-700">{error}</p>}
+      <div className="md:hidden space-y-4">
+        {weekDates.map(day => {
+          const date = format(day, "yyyy-MM-dd");
+          return <section key={date} className="bg-white rounded-xl border border-gray-200 p-3">
+            <h3 className="font-semibold mb-2">{format(day, "EEEE, MMM d")}</h3>
+            {MEAL_TYPES.map(mealType => {
+              const slot = meals.find(m => m.date === date && m.mealType === mealType);
+              return <button key={mealType} className="w-full min-h-[52px] py-2 text-left border-t border-gray-100 flex gap-3 items-center" onClick={() => slot ? openEditModal(slot) : openAddModal(date, mealType)}>
+                <span className="w-20 shrink-0 text-sm text-skydark-text-secondary">{mealType}</span>
+                <span className="min-w-0 break-words font-medium">{slot?.name || "+ Add meal"}</span>
+              </button>;
+            })}
+          </section>;
+        })}
+      </div>
 
-      <div className="overflow-x-auto">
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full border-collapse bg-white rounded-card shadow-skydark overflow-hidden min-w-[600px]">
           <thead>
             <tr className="bg-skydark-bg border-b border-gray-200">
@@ -425,7 +457,7 @@ export default function MealsView() {
         Most popular meals
       </h3>
       <p className="text-sm text-skydark-text-secondary mb-2">
-        Drag a meal to a day slot above to add it to your plan.
+        On a touchscreen, tap a meal slot and choose from your library. On the weekly grid, hold a meal briefly to drag it into a slot.
       </p>
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-3 min-w-max">
@@ -451,6 +483,7 @@ export default function MealsView() {
         editSlot={editSlot}
         viewRecipe={viewRecipe}
         recipes={recipes}
+        error={error}
         onSave={handleSaveMeal}
         onAssignFromLibrary={handleAssignFromLibrary}
         onRemove={handleRemoveMeal}

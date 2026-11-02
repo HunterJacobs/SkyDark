@@ -404,7 +404,7 @@ async def _run_db(hass: HomeAssistant, fn: Callable, *args: Any, **kwargs: Any) 
         return result
     except Exception:
         _LOGGER.exception("Skydark service failed")
-        return None
+        raise
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
@@ -465,7 +465,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         sync = hass.data.get(DOMAIN, {}).get("sync")
         if sync:
             await sync.async_handle_local_delete(event_id)
-        await _run_db(hass, db.delete_event, event_id)
+            hass.bus.async_fire(EVENT_UPDATED)
+        else:
+            await _run_db(hass, db.delete_event, event_id)
 
     async def sync_calendars(call: ServiceCall) -> None:
         sync = hass.data.get(DOMAIN, {}).get("sync")

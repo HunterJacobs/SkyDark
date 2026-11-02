@@ -313,6 +313,8 @@ class SkydarkDatabase:
                 conn.execute("ALTER TABLE meals ADD COLUMN meal_recipe_id TEXT")
             if not self._column_exists(conn, "events", "sync_push_targets"):
                 conn.execute("ALTER TABLE events ADD COLUMN sync_push_targets TEXT")
+            if not self._column_exists(conn, "points_log", "completion_date"):
+                conn.execute("ALTER TABLE points_log ADD COLUMN completion_date TEXT")
             self._seed_if_empty(conn)
 
         with self._connection() as conn:
@@ -791,6 +793,7 @@ class SkydarkDatabase:
         """
         d = (completed_date or datetime.now(timezone.utc)).date().isoformat()
         with self._connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             cur = conn.execute(
                 "SELECT assignee_id, completed_date FROM tasks WHERE id = ?", (task_id,)
             )
@@ -808,8 +811,8 @@ class SkydarkDatabase:
                 id_ = str(uuid.uuid4())
                 now = datetime.now(timezone.utc).isoformat()
                 conn.execute(
-                    "INSERT INTO points_log (id, member_id, points, reason, task_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (id_, assignee_id, points, "Task completed", task_id, now),
+                    "INSERT INTO points_log (id, member_id, points, reason, task_id, created_at, completion_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (id_, assignee_id, points, "Task completed", task_id, now, d),
                 )
 
     def uncomplete_task(self, task_id: str) -> None:
@@ -818,6 +821,7 @@ class SkydarkDatabase:
     def uncomplete_task_and_revoke_points(self, task_id: str) -> None:
         """Clear completion and remove today's 'Task completed' points for this task."""
         with self._connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             cur = conn.execute("SELECT completed_date FROM tasks WHERE id = ?", (task_id,))
             row = cur.fetchone()
             if not row:
@@ -833,7 +837,7 @@ class SkydarkDatabase:
                     DELETE FROM points_log
                     WHERE task_id = ?
                       AND reason = 'Task completed'
-                      AND date(created_at) = date(?)
+                      AND COALESCE(completion_date, date(created_at)) = date(?)
                     """,
                     (task_id, completed),
                 )

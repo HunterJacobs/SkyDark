@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useId, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export type ModalVariant = "center" | "slideRight";
@@ -15,19 +15,37 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, variant = "center", rightAction }: ModalProps) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
+    const handleKey = (e: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (!dialog || dialogs[dialogs.length - 1] !== dialog) return;
+      if (e.key === "Escape") { e.preventDefault(); onCloseRef.current(); }
+      if (e.key === "Tab") {
+        const nodes = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')).filter(el => !el.hidden && el.getAttribute("aria-hidden") !== "true");
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (!first) { e.preventDefault(); dialog.focus(); return; }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || document.activeElement === dialog)) { e.preventDefault(); first.focus(); }
+      }
     };
-    if (open) {
-      document.addEventListener("keydown", handleEscape);
-      document.body.style.overflow = "hidden";
-    }
+    document.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener("keydown", handleEscape);
-      document.body.style.overflow = "";
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      previous?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const isSlideRight = variant === "slideRight";
 
@@ -58,13 +76,15 @@ export default function Modal({ open, onClose, title, children, variant = "cente
               transition={{ type: "tween", duration: 0.25, ease: "easeInOut" }}
               className={
                 isSlideRight
-                  ? "bg-white w-full max-w-md sm:max-w-lg flex flex-col h-full overflow-hidden pointer-events-auto rounded-l-2xl shadow-skydark-modal"
-                  : "bg-white rounded-modal shadow-skydark-modal max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col pointer-events-auto"
+                  ? "bg-white w-full max-w-md sm:max-w-lg flex flex-col h-[100dvh] overflow-hidden pointer-events-auto rounded-l-2xl shadow-skydark-modal"
+                  : "bg-white rounded-modal shadow-skydark-modal max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col pointer-events-auto"
               }
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-labelledby="modal-title"
+              aria-labelledby={titleId}
+              ref={dialogRef}
+              tabIndex={-1}
             >
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 p-4 border-b border-gray-200 shrink-0">
                 <button
@@ -77,12 +97,12 @@ export default function Modal({ open, onClose, title, children, variant = "cente
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <h2 id="modal-title" className="text-lg font-semibold text-skydark-text text-center min-w-0">
+                <h2 id={titleId} className="text-lg font-semibold text-skydark-text text-center min-w-0">
                   {title}
                 </h2>
                 <div className="w-11 flex justify-end">{rightAction ?? null}</div>
               </div>
-              <div className="p-4 overflow-auto flex-1">{children}</div>
+              <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-auto overscroll-contain flex-1 min-h-0">{children}</div>
             </motion.div>
           </div>
         </>

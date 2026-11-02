@@ -210,7 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettingsState] = useState<AppSettings>(loadSettings);
   const [isAuthenticated, setAuthenticatedState] = useState(loadAuthenticated);
   const [screensaverTriggered, setScreensaverTriggered] = useState(false);
-  const [isLocked, setIsLockedState] = useState(false);
+  const [isLocked, setIsLockedState] = useState(() => loadSettings().lockEnabled);
 
   // Seed family members and family name from HA when WebSocket data is available
   useEffect(() => {

@@ -95,7 +95,7 @@ function App() {
   if (skydark?.data.loading && !skydark?.data.connection) {
     return <ConnectionLoadingScreen />;
   }
-  if (skydark?.data.error) {
+  if (skydark?.data.error && !skydark.data.connection) {
     return (
       <ConnectionErrorScreen
         message={skydark.data.error}
@@ -106,6 +106,7 @@ function App() {
 
   const content = (
     <MainLayout>
+      {skydark?.data.error && <p role="alert" className="p-3 bg-amber-50 text-amber-900 rounded-xl mb-2">Could not refresh. Showing the last loaded data. <button className="btn-ghost" onClick={() => void skydark.refetch()}>Retry</button></p>}
       <ErrorBoundary fallback={<ViewErrorFallback />}>
         <Suspense fallback={<PageLoader />}>
           <Routes>

@@ -180,8 +180,8 @@ export function eventToCalendarEvent(e: SkydarkEvent): CalendarEvent {
     id: e.id,
     title: e.title,
     description: e.description ?? undefined,
-    start_time: e.start_time,
-    end_time: e.end_time ?? undefined,
+    start_time: e.all_day ? e.start_time.slice(0,10) + "T00:00:00" : e.start_time,
+    end_time: e.all_day && e.end_time ? e.end_time.slice(0,10) + "T23:59:59" : e.end_time ?? undefined,
     all_day: Boolean(e.all_day),
     location: e.location ?? undefined,
     calendar_id: ids,
@@ -464,6 +464,8 @@ export async function fetchSyncStatus(conn: Connection): Promise<{
   return send(conn, { type: "skydark_calendar/get_sync_status" });
 }
 
+export interface SyncSummary { ok: boolean; links: { entity_id: string; pulled?: number; pushed?: number; error?: string | null }[]; }
+
 export async function saveSyncLink(
   conn: Connection,
   data: {
@@ -473,7 +475,7 @@ export async function saveSyncLink(
     push_enabled?: boolean;
     import_existing?: boolean;
   }
-): Promise<{ link_id: string }> {
+): Promise<{ link_id: string; sync?: SyncSummary | null }> {
   return send(conn, { type: "skydark_calendar/save_sync_link", ...data });
 }
 
@@ -484,6 +486,6 @@ export async function deleteSyncLink(conn: Connection, entityId: string): Promis
 export async function syncCalendarsNow(
   conn: Connection,
   data?: { entity_id?: string; import_existing?: boolean }
-): Promise<unknown> {
+): Promise<SyncSummary> {
   return send(conn, { type: "skydark_calendar/sync_now", ...data });
 }

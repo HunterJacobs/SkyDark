@@ -122,7 +122,10 @@ export async function getHAConnection(): Promise<Connection> {
       console.debug("[SkyDark] HA WebSocket disconnected");
     });
     return conn;
-  })();
+  })().catch((error) => {
+    connectionPromise = null;
+    throw error;
+  });
 
   return connectionPromise;
 }

@@ -52,8 +52,8 @@ export default function Header({
 
   return (
     <header
-      className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-skydark-bg gap-4"
-      style={{ minHeight: 80 }}
+      className="flex shrink-0 items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-skydark-bg gap-4"
+      style={{ minHeight: 64 }}
     >
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <h1 className="text-lg sm:text-xl font-semibold text-skydark-text truncate">
@@ -61,7 +61,7 @@ export default function Header({
         </h1>
         <span className="text-sm sm:text-base text-skydark-text-secondary shrink-0">{time}</span>
         {todayWeather && (
-          <span className="text-sm sm:text-base text-skydark-text-secondary shrink-0 inline-flex items-center gap-1">
+          <span className="text-sm sm:text-base text-skydark-text-secondary shrink-0 hidden sm:inline-flex items-center gap-1">
             <span aria-hidden>{getWeatherIcon(todayWeather.condition)}</span>
             {Math.round(todayWeather.tempMax)}°
           </span>

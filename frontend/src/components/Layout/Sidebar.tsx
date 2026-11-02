@@ -1,3 +1,5 @@
+import { useState } from "react";
+import Modal from "../Common/Modal";
 import { NavLink } from "react-router-dom";
 import {
   LogoIcon,
@@ -30,6 +32,7 @@ export const navItems = [
 ];
 
 export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const nav = (
     <div className={`flex ${mobile ? "flex-row justify-around w-full" : "flex-col items-center gap-1 w-full"}`}>
       {navItems.map(({ path, label, Icon }) => (
@@ -55,13 +58,27 @@ export default function Sidebar({ mobile = false }: { mobile?: boolean }) {
   );
 
   if (mobile) {
+    const primary = navItems.filter(({ path }) => ["/calendar", "/tasks", "/lists", "/meals"].includes(path));
     return (
-      <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-white py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
-        aria-label="Mobile navigation"
-      >
-        {nav}
-      </nav>
+      <>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 bg-white pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] grid grid-cols-5" aria-label="Mobile navigation">
+          {primary.map(({ path, label, Icon }) => (
+            <NavLink key={path} to={path} className={({ isActive }) => `min-h-[56px] min-w-0 flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${isActive ? "text-skydark-accent bg-skydark-accent-bg" : "text-skydark-text-secondary"}`}>
+              <Icon /><span>{label}</span>
+            </NavLink>
+          ))}
+          <button className="min-h-[56px] flex flex-col items-center justify-center gap-1 text-[11px] font-medium" onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-label="More navigation">
+            <span className="text-xl leading-6" aria-hidden>•••</span><span>More</span>
+          </button>
+        </nav>
+        <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+          <nav className="grid grid-cols-2 gap-3" aria-label="More navigation">
+            {navItems.filter(item => !primary.includes(item)).map(({ path, label, Icon }) => (
+              <NavLink key={path} to={path} onClick={() => setMoreOpen(false)} className="min-h-[80px] rounded-xl bg-skydark-bg flex flex-col items-center justify-center gap-2 font-medium"><Icon />{label}</NavLink>
+            ))}
+          </nav>
+        </Modal>
+      </>
     );
   }
 

@@ -82,3 +82,15 @@ a:focus-visible,
     background-position: right 12px center;
   }
 }
+
+/* Preserve normal scrolling and pinch zoom while making controls easy to tap. */
+html { -webkit-text-size-adjust: 100%; }
+button, a, input, select, textarea { touch-action: manipulation; }
+input, select, textarea { max-width: 100%; }
+@media (pointer: coarse) {
+  button:not([data-calendar-event]) { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
