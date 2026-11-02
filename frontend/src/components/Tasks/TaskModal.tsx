@@ -5,6 +5,7 @@ import type { CustomScheduleType } from "../../types/tasks";
 import { TASK_CATEGORIES, TASK_FREQUENCIES, WEEKDAY_LABELS, MONTH_LABELS } from "../../types/tasks";
 import Modal from "../Common/Modal";
 import Toggle from "../Common/Toggle";
+import { avatarStyle } from "../../lib/colors";
 
 const EMOJI_OPTIONS = ["📋", "🧹", "🍽️", "📚", "🐕", "🗑️", "💊", "⭐", ""];
 
@@ -187,8 +188,8 @@ export default function TaskModal({
                   }`}
                 >
                   <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                    style={{ backgroundColor: m.color }}
+                    className="w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm"
+                    style={avatarStyle(m.color)}
                   >
                     {m.initial}
                   </div>

@@ -132,8 +132,48 @@ export async function fetchFamilyMembers(conn: Connection): Promise<{
 export async function fetchConfig(conn: Connection): Promise<{
   panel_url?: string;
   config?: Record<string, unknown>;
+  /** Integration version reported by Home Assistant (manifest.json). */
+  version?: string | null;
 }> {
   return send(conn, { type: "skydark_calendar/get_config" });
+}
+
+/** Save shared settings (stored in the integration's options, so every display sees them). */
+export async function updateConfig(
+  conn: Connection,
+  values: { family_name?: string; weather_entity?: string }
+): Promise<{ config: Record<string, unknown> }> {
+  return send(conn, { type: "skydark_calendar/update_config", ...values });
+}
+
+export interface SkydarkPhoto {
+  id: string;
+  /** Signed, directly loadable URL (expires after ~24h; refetch to renew). */
+  url: string;
+  caption: string;
+  created_at?: string;
+}
+
+export async function fetchPhotos(
+  conn: Connection
+): Promise<{ photos: SkydarkPhoto[]; supported?: boolean }> {
+  return send(conn, { type: "skydark_calendar/get_photos" });
+}
+
+export async function uploadPhoto(
+  conn: Connection,
+  dataUrl: string,
+  caption?: string
+): Promise<{ photo: SkydarkPhoto }> {
+  return send(conn, {
+    type: "skydark_calendar/upload_photo",
+    data_url: dataUrl,
+    ...(caption ? { caption } : {}),
+  });
+}
+
+export async function deletePhoto(conn: Connection, photoId: string): Promise<{ ok: boolean }> {
+  return send(conn, { type: "skydark_calendar/delete_photo", photo_id: photoId });
 }
 
 export async function fetchPoints(conn: Connection): Promise<{ points_by_member: Record<string, number> }> {

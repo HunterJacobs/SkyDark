@@ -13,15 +13,15 @@ interface SettingsSectionProps {
 
 export default function SettingsSection({ title, icon, children }: SettingsSectionProps) {
   return (
-    <section className="mb-8" aria-labelledby={`section-${title.replace(/\s/g, "-")}`}>
+    <section className="mb-6" aria-labelledby={`section-${title.replace(/\s/g, "-")}`}>
       <h3
         id={`section-${title.replace(/\s/g, "-")}`}
-        className="text-base font-semibold text-skydark-text mb-4 flex items-center gap-2"
+        className="text-sm font-semibold uppercase tracking-wide text-skydark-text-secondary mb-2 px-1 flex items-center gap-2"
       >
         {icon}
         <span>{title}</span>
       </h3>
-      <div className="space-y-1">{children}</div>
+      <div className="rounded-card-lg bg-white shadow-skydark px-4 sm:px-5 py-1">{children}</div>
     </section>
   );
 }
@@ -36,7 +36,7 @@ interface SettingRowProps {
 
 export function SettingRow({ label, icon, value, control }: SettingRowProps) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 px-0 border-b border-gray-100 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 min-h-[56px] py-2.5 border-b border-gray-100 last:border-b-0">
       <div className="flex items-center gap-3 min-w-0">
         {icon && <span className="shrink-0 text-skydark-text-secondary">{icon}</span>}
         <div className="min-w-0">

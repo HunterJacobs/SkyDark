@@ -38,7 +38,7 @@ export interface SkydarkDataState {
   meals: SkydarkMeal[];
   recipes: SkydarkMealRecipe[];
   familyMembers: FamilyMember[];
-  config: { family_name?: string; weather_entity?: string; panel_url?: string } | null;
+  config: { family_name?: string; weather_entity?: string; panel_url?: string; version?: string | null } | null;
   pointsByMember: Record<string, number>;
   rewards: SkydarkReward[];
   loading: boolean;
@@ -100,6 +100,7 @@ export function useSkydarkData(): {
         panel_url: configRes.panel_url,
         family_name: (cfg as { family_name?: string }).family_name,
         weather_entity: (cfg as { weather_entity?: string }).weather_entity,
+        version: configRes.version ?? null,
       };
 
       setData((prev) => ({

@@ -11,6 +11,7 @@ import { serviceCompleteTask, serviceUncompleteTask, serviceAddTask, serviceUpda
 import { scheduleFromTask, isCompletedToday, todayStr } from "../lib/taskSchedule";
 import type { Task } from "../types/tasks";
 import { isDueToday, isLateInLastWeek, formatWeekdays, formatCustomSchedule } from "../types/tasks";
+import { avatarStyle } from "../lib/colors";
 
 type ChoresTabId = "byPerson" | "allChores";
 type ViewFilterId = "all" | "daily" | "weekly" | "custom";
@@ -330,8 +331,8 @@ export default function TasksView() {
                         {member ? (
                           <span className="inline-flex items-center gap-2">
                             <span
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                              style={{ backgroundColor: member.color }}
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                              style={avatarStyle(member.color)}
                             >
                               {member.initial || member.name[0]}
                             </span>

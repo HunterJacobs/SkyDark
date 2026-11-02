@@ -7,11 +7,13 @@ import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+
+EVENT_UPDATED = "skydark_calendar_updated"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +52,16 @@ class SkydarkBaseSensor(SensorEntity):
         self._entry = entry
         self._hass = hass
 
+    async def async_added_to_hass(self) -> None:
+        """Refresh as soon as Skydark data changes instead of waiting for the next poll."""
+        await super().async_added_to_hass()
+
+        @callback
+        def _on_update(_event: Event) -> None:
+            self.async_schedule_update_ha_state(True)
+
+        self.async_on_remove(self.hass.bus.async_listen(EVENT_UPDATED, _on_update))
+
 
 class SkydarkTasksTodaySensor(SkydarkBaseSensor):
     """Sensor for number of tasks due today."""
@@ -73,7 +85,7 @@ class SkydarkTasksTodaySensor(SkydarkBaseSensor):
             self._attr_available = False
             return
         try:
-            today = dt_util.utcnow().date().isoformat()
+            today = dt_util.now().date().isoformat()
             tasks = await self._hass.async_add_executor_job(
                 lambda: db.get_tasks(due_date=today, include_completed=False)
             )
@@ -108,7 +120,7 @@ class SkydarkCompletedTasksSensor(SkydarkBaseSensor):
             self._attr_available = False
             return
         try:
-            today = dt_util.utcnow().date().isoformat()
+            today = dt_util.now().date().isoformat()
             tasks = await self._hass.async_add_executor_job(
                 lambda: db.get_tasks(completed_date=today)
             )

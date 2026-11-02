@@ -9,6 +9,7 @@ import { useAppContext } from "../../contexts/AppContext";
 import { toDatetimeLocalValue, localDateTimeToISO } from "../../lib/dates";
 import { fetchSyncStatus, type CalendarSyncLink } from "../../lib/skyDarkApi";
 import { useSkydarkDataContext } from "../../contexts/SkydarkDataContext";
+import { avatarStyle } from "../../lib/colors";
 
 type EventModalMode = "view" | "edit" | "create";
 
@@ -207,8 +208,8 @@ export default function EventModal({
                     className="flex items-center gap-2"
                   >
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                      style={{ backgroundColor: m.color }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                      style={avatarStyle(m.color)}
                     >
                       {m.initial}
                     </div>
@@ -311,8 +312,8 @@ export default function EventModal({
                     className={`flex flex-col items-center gap-1 p-1.5 rounded-xl ${selected ? "bg-skydark-accent-bg ring-2 ring-skydark-accent" : "hover:bg-gray-50"}`}
                   >
                     <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                      style={{ backgroundColor: m.color }}
+                      className="w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm"
+                      style={avatarStyle(m.color)}
                     >
                       {m.initial}
                     </div>

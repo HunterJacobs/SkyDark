@@ -1,6 +1,6 @@
 # Skydark Family Calendar - Home Assistant
 
-A Skydark Calendar-style family organization panel for Home Assistant: calendar, chores, lists, meals, photos, rewards, and sleep routines.
+A family organization panel for Home Assistant: calendar, chores, lists, meals, photos, and rewards, designed for a wall-mounted tablet.
 
 ## Features
 
@@ -8,10 +8,9 @@ A Skydark Calendar-style family organization panel for Home Assistant: calendar,
 - **Chores & Tasks**: Per-person columns, progress indicators, daily/weekly/custom frequency, completion animations
 - **Lists**: Multiple lists (grocery, to-do, etc.) with add item and checkboxes
 - **Meals**: Weekly meal planning grid
-- **Photos**: Grid and slideshow
+- **Photos & sleep mode**: Photos are stored in Home Assistant media (**Media → My Media → Calendar Images**) and shown as a slideshow with the time and weather when the screen is idle
 - **Rewards**: Points and reward tracking per family member
-- **Sleep**: Bedtime and routine checklists
-- **Settings**: Family name, member colors, weather entity, two-way calendar sync
+- **Settings**: Family name and weather (shared by every display), member colors, two-way calendar sync, PIN lock, and a Developer page showing the panel and integration versions
 - **Home Assistant**: Custom panel, SQLite storage, services (`add_event`, `complete_task`, `add_list_item`, `send_notification`), sensors (tasks today, completed, next event), event bus for automations
 
 ## Installation
@@ -45,19 +44,11 @@ config/
     skydark_calendar/
       __init__.py
       manifest.json
-      config_flow.py
-      const.py
-      database.py
-      calendar.py
-      sensor.py
-      services.py
-      google_calendar.py
-      microsoft_calendar.py
-      services.yaml
-      strings.json
-      translations/
+      ...           # copy the whole folder, including brand/ and translations/
       www/          # frontend build output (included)
 ```
+
+Requires Home Assistant 2024.7 or newer.
 
 #### 2. Restart Home Assistant
 
@@ -75,23 +66,6 @@ Restart HA so the integration is loaded.
 - In the sidebar, open **Skydark Calendar** (calendar icon and title).
 - The panel loads the React app from `/skydark/`.
 
-## Publishing to GitHub
-
-To publish this integration to your own GitHub repository:
-
-1. In the project root, run:
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit: Skydark Family Calendar integration"
-   git remote add origin https://github.com/HunterJacobs/SkyDark.git
-   git branch -M main
-   git push -u origin main
-   ```
-
-After pushing, others can install via HACS by adding your repo URL as a custom repository (Integration).
-
 ## Development
 
 ### Frontend
@@ -103,6 +77,12 @@ npm run dev    # Vite dev server
 npm run build  # Builds into custom_components/skydark_calendar/www
 npm run test   # Vitest
 ```
+
+The version shown in **Settings → Developer** comes from `custom_components/skydark_calendar/manifest.json`. Bump it there before a release and rebuild, so the panel and integration versions match. If a display shows a mismatch, it's running a cached older panel; **Reload panel** fixes it.
+
+### Run without Home Assistant
+
+`./scripts/run-standalone.sh` starts a small local API (SQLite) plus the Vite dev server. It listens on `127.0.0.1` only because it has no authentication; set `HOST=0.0.0.0` to reach it from another device on a trusted network. Calendar sync and photo uploads need Home Assistant.
 
 ### Run full app locally
 
@@ -128,6 +108,10 @@ The backend is the Home Assistant custom component. Use a Python environment mat
 - `skydark_calendar.add_reward` / `delete_reward` / `add_points` / `redeem_reward`
 - `skydark_calendar.upload_photo` / `send_notification` / `sync_calendars`
 
+`upload_photo` copies a JPEG, PNG, GIF, or WebP file from the config folder (for example a camera snapshot) into the photo slideshow.
+
+Services report problems back to the caller (for example, redeeming a reward without enough points shows an error instead of silently doing nothing).
+
 ## Automations
 
 The integration fires `skydark_calendar_event_created` when an event is added via the service, and `skydark_calendar_updated` after any data mutation. Use them as triggers in automations.
@@ -147,7 +131,7 @@ Sync runs every 15 minutes and after you add, edit, or delete an event. SkyDark�
 
 ## UI
 
-The UI follows the Skydark reference: light background `#F8FAFB`, accent `#3B9BBF`, pastel event colors, 80px sidebar, FAB bottom-right. Optimized for landscape tablet (e.g. 15" display).
+Light background `#F8FAFB`, accent `#3B9BBF`, pastel family-member colors with automatically readable initials, a labeled navigation rail, and a FAB bottom-right. Optimized for landscape tablets (e.g. a 15" display).
 
 ## Responsive and touch use
 

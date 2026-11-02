@@ -5,7 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "types": ["node"]
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "outDir": "node_modules/.tmp/tsconfig.node",
+    "tsBuildInfoFile": "node_modules/.tmp/tsconfig.node.tsbuildinfo"
   },
   "include": ["vite.config.ts"]
 }

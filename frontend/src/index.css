@@ -88,7 +88,8 @@ html { -webkit-text-size-adjust: 100%; }
 button, a, input, select, textarea { touch-action: manipulation; }
 input, select, textarea { max-width: 100%; }
 @media (pointer: coarse) {
-  button:not([data-calendar-event]) { min-height: 44px; }
+  /* Switches keep their compact shape; Toggle enlarges its own hit area instead. */
+  button:not([data-calendar-event]):not([data-toggle]) { min-height: 44px; }
   input, select, textarea { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {

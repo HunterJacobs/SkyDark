@@ -3,16 +3,24 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Any
+from urllib.parse import quote
 
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant
+from homeassistant.components.http.auth import async_sign_path
+from homeassistant.core import HomeAssistant, valid_entity_id
+from homeassistant.loader import async_get_integration
 
-from .const import DOMAIN
+from . import photo_media
+from .const import CONF_FAMILY_NAME, CONF_WEATHER_ENTITY, DOMAIN
+
+# How long signed photo URLs stay valid; the panel refreshes the list well before this.
+PHOTO_URL_TTL = timedelta(hours=24)
+EVENT_UPDATED = "skydark_calendar_updated"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -204,13 +212,160 @@ async def websocket_get_config(
         return
 
     data = hass.data[DOMAIN]
+    try:
+        version = (await async_get_integration(hass, DOMAIN)).version
+    except Exception:  # noqa: BLE001 - version is informational only
+        version = None
     connection.send_result(
         msg["id"],
         {
             "panel_url": data.get("panel_url"),
             "config": data.get("config", {}),
+            "version": str(version) if version else None,
         },
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/update_config",
+        vol.Optional(CONF_FAMILY_NAME): vol.All(str, vol.Length(min=1, max=60)),
+        vol.Optional(CONF_WEATHER_ENTITY): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_update_config(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save family name / weather entity to the config entry so every display shares them."""
+    entry_id = hass.data.get(DOMAIN, {}).get("entry_id")
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if entry is None:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+
+    options = {**entry.options}
+    if CONF_FAMILY_NAME in msg:
+        options[CONF_FAMILY_NAME] = msg[CONF_FAMILY_NAME].strip()
+    if CONF_WEATHER_ENTITY in msg:
+        weather = msg[CONF_WEATHER_ENTITY].strip()
+        if weather and (
+            not valid_entity_id(weather)
+            or not weather.startswith("weather.")
+            or hass.states.get(weather) is None
+        ):
+            connection.send_error(
+                msg["id"], "invalid_entity", f"{weather} is not a weather entity in Home Assistant."
+            )
+            return
+        options[CONF_WEATHER_ENTITY] = weather
+
+    hass.config_entries.async_update_entry(entry, options=options)
+    config = {**entry.data, **options}
+    hass.data[DOMAIN]["config"] = config
+    connection.send_result(msg["id"], {"config": config})
+
+
+def _signed_photo(hass: HomeAssistant, connection: Any, row: dict[str, Any]) -> dict[str, Any]:
+    # HA signs the decoded path; re-encode it so the URL is valid as-is in an <img src>.
+    signed = async_sign_path(
+        hass, row["file_path"], PHOTO_URL_TTL, refresh_token_id=connection.refresh_token_id
+    )
+    path, sep, query = signed.partition("?")
+    return {
+        "id": row["id"],
+        "url": quote(path) + sep + query,
+        "caption": row.get("caption") or "",
+        "created_at": row.get("created_at"),
+    }
+
+
+@websocket_api.websocket_command({vol.Required("type"): "skydark_calendar/get_photos"})
+@websocket_api.async_response
+async def websocket_get_photos(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return photos with short-lived signed URLs the panel can load directly."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    rows = await hass.async_add_executor_job(db.get_photos)
+    photos = [
+        _signed_photo(hass, connection, row)
+        for row in rows
+        if str(row.get("file_path") or "").startswith(photo_media.MEDIA_URL_PREFIX)
+    ]
+    connection.send_result(msg["id"], {"photos": photos})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/upload_photo",
+        vol.Required("data_url"): str,
+        vol.Optional("caption"): vol.All(str, vol.Length(max=200)),
+    }
+)
+@websocket_api.async_response
+async def websocket_upload_photo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save an uploaded photo into Media > Calendar Images."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    try:
+        url = await hass.async_add_executor_job(photo_media.save_data_url, hass, msg["data_url"])
+    except photo_media.PhotoError as err:
+        connection.send_error(msg["id"], "invalid_photo", str(err))
+        return
+    except OSError:
+        _LOGGER.exception("Could not save uploaded photo")
+        connection.send_error(msg["id"], "failed", "Could not save the photo to Home Assistant media.")
+        return
+    photo_id = await hass.async_add_executor_job(
+        partial(db.add_photo, file_path=url, caption=msg.get("caption"))
+    )
+    row = await hass.async_add_executor_job(db.get_photo, photo_id)
+    hass.bus.async_fire(EVENT_UPDATED)
+    connection.send_result(msg["id"], {"photo": _signed_photo(hass, connection, row)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "skydark_calendar/delete_photo",
+        vol.Required("photo_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_delete_photo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Delete a photo and its file."""
+    db = _get_db(hass)
+    if not db:
+        connection.send_error(msg["id"], "not_ready", "Integration not loaded")
+        return
+    row = await hass.async_add_executor_job(db.get_photo, msg["photo_id"])
+    if row is None:
+        connection.send_error(msg["id"], "not_found", "Photo not found")
+        return
+    await hass.async_add_executor_job(db.delete_photo, msg["photo_id"])
+    try:
+        await hass.async_add_executor_job(photo_media.delete_file, hass, row["file_path"])
+    except OSError:
+        _LOGGER.warning("Photo %s removed but its file could not be deleted", msg["photo_id"])
+    hass.bus.async_fire(EVENT_UPDATED)
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.websocket_command(
@@ -449,4 +604,8 @@ async def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_save_sync_link)
     websocket_api.async_register_command(hass, websocket_delete_sync_link)
     websocket_api.async_register_command(hass, websocket_sync_now)
+    websocket_api.async_register_command(hass, websocket_update_config)
+    websocket_api.async_register_command(hass, websocket_get_photos)
+    websocket_api.async_register_command(hass, websocket_upload_photo)
+    websocket_api.async_register_command(hass, websocket_delete_photo)
     hass.data.setdefault(DOMAIN, {})["ws_registered"] = True

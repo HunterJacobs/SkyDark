@@ -3,6 +3,7 @@ import type { FamilyMember } from "../../types/calendar";
 import type { Task } from "../../types/tasks";
 import { isCompletedToday } from "../../lib/taskSchedule";
 import TaskItem from "./TaskItem";
+import { avatarStyle } from "../../lib/colors";
 
 interface PersonColumnProps {
   member: FamilyMember;
@@ -38,8 +39,8 @@ export default function PersonColumn({
         style={{ backgroundColor: `${member.color}40` }}
       >
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold text-white flex-shrink-0"
-          style={{ backgroundColor: member.color }}
+          className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold flex-shrink-0"
+          style={avatarStyle(member.color)}
         >
           {member.initial || member.name[0]}
         </div>

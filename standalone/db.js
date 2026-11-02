@@ -281,12 +281,28 @@ export function getRewards() {
   return query(db, "SELECT * FROM rewards ORDER BY points_required");
 }
 
+function getSetting(key) {
+  return query(db, "SELECT value FROM app_settings WHERE key = ?", [key])[0]?.value;
+}
+
 export function getConfig() {
-  const row = query(db, "SELECT value FROM app_settings WHERE key = 'family_name'")[0];
   return {
     panel_url: "/skydark",
-    config: { family_name: row?.value ?? "My Family", weather_entity: null },
+    config: {
+      family_name: getSetting("family_name") ?? "My Family",
+      weather_entity: getSetting("weather_entity") || null,
+    },
   };
+}
+
+export function updateConfig(values) {
+  for (const key of ["family_name", "weather_entity"]) {
+    if (typeof values[key] === "string") {
+      run(db, "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [key, values[key].trim()]);
+    }
+  }
+  save();
+  return getConfig();
 }
 
 export function addEvent(data) {
@@ -629,6 +645,7 @@ export function deleteFamilyMember(memberId) {
   run(db, "DELETE FROM tasks WHERE assignee_id = ?", [memberId]);
   run(db, "UPDATE lists SET owner_id = NULL WHERE owner_id = ?", [memberId]);
   run(db, "UPDATE photos SET uploaded_by = NULL WHERE uploaded_by = ?", [memberId]);
+  run(db, "DELETE FROM points_log WHERE member_id = ?", [memberId]);
   run(db, "DELETE FROM family_members WHERE id = ?", [memberId]);
   save();
 }

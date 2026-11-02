@@ -104,7 +104,7 @@
     },
     "upload_photo": {
       "name": "Upload photo",
-      "description": "Register a photo (file must already exist at file_path within config directory)."
+      "description": "Add an image from the Home Assistant config folder (for example a camera snapshot) to the Skydark photo slideshow."
     },
     "send_notification": {
       "name": "Send notification",

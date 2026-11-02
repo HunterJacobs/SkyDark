@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ListItem from "./ListItem";
 import CloseIcon from "../Common/CloseIcon";
+import { avatarStyle } from "../../lib/colors";
 
 export interface ListItemData {
   id: string;
@@ -56,8 +57,8 @@ export default function ListCard({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <span
-            className="px-2 py-0.5 rounded-full text-white text-sm font-medium"
-            style={{ backgroundColor: color }}
+            className="px-2 py-0.5 rounded-full text-sm font-medium"
+            style={avatarStyle(color)}
           >
             {items.length}
           </span>
